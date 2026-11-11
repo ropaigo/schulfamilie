@@ -3021,7 +3021,7 @@ function GermanGradePickerModal({ exam, onClose, onSave }) {
 // ============================================================================
 // VISTA 5: HORAS Y SINCRONIZACIÓN P2P (WEBRTC EN VIVO + QUICK SHARE SAMSUMG)
 // ============================================================================
-function StatsAndP2PSyncView({ appData, setAppData, showToast }) {
+function StatsAndP2PSyncView({ appData, currentStudent, setAppData, showToast }) {
   const [peerStatus, setPeerStatus] = useState('idle'); // 'idle' | 'connecting' | 'ready' | 'connected' | 'error'
   const [roomCode, setRoomCode] = useState('');
   const [targetCodeInput, setTargetCodeInput] = useState('');
