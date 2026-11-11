@@ -1,0 +1,3188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SchulFamilie">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/svg+xml" href="./icon-192.svg">
+  <link rel="apple-touch-icon" href="./icon-192.svg">
+  <title>SchulFamilie — Enrique y Fernando</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "https://esm.sh/react@18.2.0",
+      "react/": "https://esm.sh/react@18.2.0/",
+      "react-dom": "https://esm.sh/react-dom@18.2.0",
+      "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+      "lucide-react": "https://esm.sh/lucide-react@0.344.0"
+    }
+  }
+  </script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    :root {
+      --sat: env(safe-area-inset-top, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+    }
+    body {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      overscroll-behavior-y: none;
+    }
+
+    /* Estilo limpio para navegación flotante compatible con barras inferiores */
+    .safe-bottom-dock {
+      bottom: 46px;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 antialiased">
+  <!-- Banner de instalación PWA -->
+  <div id="pwa-install-banner" style="display:none;" class="bg-indigo-600 text-white px-4 py-2 text-xs font-bold flex items-center justify-between shadow-md z-50 sticky top-0">
+    <div class="flex items-center gap-2">
+      <span>📲</span>
+      <span>Instalar SchulFamilie en pantalla de inicio</span>
+    </div>
+    <div class="flex items-center gap-2 shrink-0">
+      <button id="pwa-install-btn" class="px-3 py-1 rounded-lg bg-white text-indigo-700 font-extrabold shadow">Instalar</button>
+      <button id="pwa-dismiss-btn" class="px-1.5 py-1 text-indigo-200 hover:text-white">✕</button>
+    </div>
+  </div>
+
+  <div id="root">
+    <div class="min-h-screen flex items-center justify-center bg-slate-900 text-white">
+      <div class="text-center p-6">
+        <div class="text-5xl mb-3">🎒</div>
+        <div class="w-10 h-10 border-4 border-indigo-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+        <p class="text-base font-bold text-slate-100">Cargando SchulFamilie...</p>
+        <p class="text-xs text-indigo-300 mt-1">Enrique &amp; Fernando • Local-First</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function() {
+        navigator.serviceWorker.register("./sw.js").catch(function() {});
+      });
+    }
+
+    let deferredPrompt = null;
+    const banner = document.getElementById("pwa-install-banner");
+    const installBtn = document.getElementById("pwa-install-btn");
+    const dismissBtn = document.getElementById("pwa-dismiss-btn");
+
+    window.addEventListener("beforeinstallprompt", function(e) {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (banner) banner.style.display = "flex";
+    });
+
+    if (installBtn) {
+      installBtn.addEventListener("click", async function() {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        if (banner) banner.style.display = "none";
+      });
+    }
+    if (dismissBtn) {
+      dismissBtn.addEventListener("click", function() {
+        if (banner) banner.style.display = "none";
+      });
+    }
+  </script>
+
+  <script type="text/babel" data-type="module">
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import ReactDOM from 'react-dom/client';
+import {
+  BookOpen, Calendar, Clock, CheckCircle2, AlertCircle, Sparkles,
+  Users, User, Plus, ChevronRight, ChevronDown, Brain, Trophy,
+  Share2, RefreshCw, Download, Upload, Edit3, Trash2, Check, X,
+  Flame, GraduationCap, ArrowRight, RotateCcw, HelpCircle, FileText,
+  BarChart3, Settings, ShieldCheck, Wifi, Smartphone, MessageSquare,
+  SlidersHorizontal, AlertTriangle, Star, Play, CheckSquare, Square
+} from 'lucide-react';
+
+// ============================================================================
+// CONSTANTES Y SISTEMA ESCOLAR ALEMÁN (NOTENSYSTEM 1+ BIS 6)
+// ============================================================================
+const STORAGE_KEY = 'SCHUL_FAMILIE_TRACKER_V2';
+
+const GERMAN_GRADES = [
+  { label: '1+', value: 0.7, text: 'Sehr gut (Sobresaliente alto)', color: 'bg-emerald-600 text-white' },
+  { label: '1',  value: 1.0, text: 'Sehr gut (Sobresaliente)', color: 'bg-emerald-500 text-white' },
+  { label: '1-', value: 1.3, text: 'Sehr gut (Sobresaliente bajo)', color: 'bg-emerald-400 text-slate-950' },
+  { label: '2+', value: 1.7, text: 'Gut (Notable alto)', color: 'bg-green-500 text-white' },
+  { label: '2',  value: 2.0, text: 'Gut (Notable)', color: 'bg-green-400 text-slate-950' },
+  { label: '2-', value: 2.3, text: 'Gut (Notable bajo)', color: 'bg-lime-400 text-slate-950' },
+  { label: '3+', value: 2.7, text: 'Befriedigend (Bien alto)', color: 'bg-yellow-400 text-slate-950' },
+  { label: '3',  value: 3.0, text: 'Befriedigend (Bien)', color: 'bg-amber-400 text-slate-950' },
+  { label: '3-', value: 3.3, text: 'Befriedigend (Bien bajo)', color: 'bg-amber-500 text-white' },
+  { label: '4+', value: 3.7, text: 'Ausreichend (Suficiente alto)', color: 'bg-orange-400 text-white' },
+  { label: '4',  value: 4.0, text: 'Ausreichend (Suficiente)', color: 'bg-orange-500 text-white' },
+  { label: '4-', value: 4.3, text: 'Ausreichend (Suficiente justo)', color: 'bg-orange-600 text-white' },
+  { label: '5+', value: 4.7, text: 'Mangelhaft (Insuficiente)', color: 'bg-red-500 text-white' },
+  { label: '5',  value: 5.0, text: 'Mangelhaft (Insuficiente)', color: 'bg-red-600 text-white' },
+  { label: '5-', value: 5.3, text: 'Mangelhaft (Insuficiente grave)', color: 'bg-red-700 text-white' },
+  { label: '6',  value: 6.0, text: 'Ungenügend (Muy deficiente)', color: 'bg-rose-900 text-white' },
+];
+
+const COMPREHENSION_LEVELS = [
+  { id: 1, emoji: '🔴', label: 'Me cuesta mucho / No lo entendí', short: 'Cuesta mucho', days: 1, badgeClass: 'bg-red-100 text-red-800 border-red-300', btnClass: 'border-red-300 bg-red-50 hover:bg-red-100 text-red-900' },
+  { id: 2, emoji: '🟠', label: 'Regular / Con dudas', short: 'Con dudas', days: 3, badgeClass: 'bg-amber-100 text-amber-800 border-amber-300', btnClass: 'border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900' },
+  { id: 3, emoji: '🟢', label: 'Bien entendido', short: 'Bien', days: 5, badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300', btnClass: 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-900' },
+  { id: 4, emoji: '🚀', label: 'Dominado / Súper claro', short: 'Dominado', days: 7, badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-300', btnClass: 'border-indigo-300 bg-indigo-50 hover:bg-indigo-100 text-indigo-900' },
+];
+
+const POST_EXAM_FEELINGS = [
+  { id: 'great', emoji: '😍', label: 'Muy fácil' },
+  { id: 'good', emoji: '🙂', label: 'Bien' },
+  { id: 'ok', emoji: '😐', label: 'Regular' },
+  { id: 'hard', emoji: '😰', label: 'Difícil' },
+];
+
+const WEEKDAYS = [
+  { key: 1, name: 'Lunes', short: 'Lun', de: 'Montag' },
+  { key: 2, name: 'Martes', short: 'Mar', de: 'Dienstag' },
+  { key: 3, name: 'Miércoles', short: 'Mié', de: 'Mittwoch' },
+  { key: 4, name: 'Jueves', short: 'Jue', de: 'Donnerstag' },
+  { key: 5, name: 'Viernes', short: 'Vie', de: 'Freitag' },
+];
+
+const toDateStr = (dateObj = new Date()) => {
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const addDaysStr = (baseDateStr, days) => {
+  const [y, m, d] = baseDateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  return toDateStr(dt);
+};
+
+const diffDaysFromToday = (targetDateStr) => {
+  const todayStr = toDateStr(new Date());
+  const [ty, tm, td] = todayStr.split('-').map(Number);
+  const [ey, em, ed] = targetDateStr.split('-').map(Number);
+  const tDate = new Date(ty, tm - 1, td);
+  const eDate = new Date(ey, em - 1, ed);
+  return Math.round((eDate - tDate) / (1000 * 60 * 60 * 24));
+};
+
+const formatHumanDate = (dateStr) => {
+  if (!dateStr) return '';
+  const diff = diffDaysFromToday(dateStr);
+  if (diff === 0) return 'Hoy';
+  if (diff === -1) return 'Ayer';
+  if (diff === 1) return 'Mañana';
+  const [y, m, d] = dateStr.split('-');
+  return `${d}.${m}.${y}`;
+};
+
+const formatMinutes = (mins = 0) => {
+  if (!mins || mins <= 0) return '0m';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
+};
+
+const uid = (prefix = 'id') => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+// ============================================================================
+// DATOS INICIALES REALISTAS: ENRIQUE Y FERNANDO
+// ============================================================================
+const createInitialData = () => {
+  const today = toDateStr(new Date());
+  const yesterday = addDaysStr(today, -1);
+  const twoDaysAgo = addDaysStr(today, -2);
+  const in3Days = addDaysStr(today, 3);
+  const in6Days = addDaysStr(today, 6);
+
+  return {
+    lastUpdated: Date.now(),
+    students: [
+      { id: 'stu_1', name: 'Enrique', gradeLevel: '7. Klasse (Gymnasium)', avatar: '👦🏻', color: 'indigo' },
+      { id: 'stu_2', name: 'Fernando', gradeLevel: '5. Klasse (Realschule)', avatar: '👦🏼', color: 'emerald' },
+    ],
+    subjects: [
+      // Enrique (stu_1)
+      { id: 'sub_e_mathe', student_id: 'stu_1', name: 'Mathematik', icon: '📐', color: 'bg-blue-600' },
+      { id: 'sub_e_bio',   student_id: 'stu_1', name: 'Biologie',   icon: '🌿', color: 'bg-emerald-600' },
+      { id: 'sub_e_deu',   student_id: 'stu_1', name: 'Deutsch',    icon: '📖', color: 'bg-amber-600' },
+      { id: 'sub_e_eng',   student_id: 'stu_1', name: 'Englisch',   icon: '🇬🇧', color: 'bg-purple-600' },
+      { id: 'sub_e_geo',   student_id: 'stu_1', name: 'Geografie',  icon: '🌍', color: 'bg-teal-600' },
+      // Fernando (stu_2)
+      { id: 'sub_f_mathe', student_id: 'stu_2', name: 'Mathematik', icon: '🔢', color: 'bg-blue-500' },
+      { id: 'sub_f_deu',   student_id: 'stu_2', name: 'Deutsch',    icon: '✍️', color: 'bg-amber-500' },
+      { id: 'sub_f_nwa',   student_id: 'stu_2', name: 'Natur & Technik', icon: '🔬', color: 'bg-teal-600' },
+      { id: 'sub_f_eng',   student_id: 'stu_2', name: 'Englisch',   icon: '🗣️', color: 'bg-indigo-500' },
+    ],
+    // Horario semanal configurable por alumno (Lunes a Viernes)
+    schedules: {
+      stu_1: {
+        1: ['sub_e_mathe', 'sub_e_deu', 'sub_e_bio'],
+        2: ['sub_e_eng', 'sub_e_mathe', 'sub_e_deu'],
+        3: ['sub_e_bio', 'sub_e_mathe', 'sub_e_geo'],
+        4: ['sub_e_deu', 'sub_e_bio', 'sub_e_mathe'],
+        5: ['sub_e_mathe', 'sub_e_eng', 'sub_e_deu'],
+      },
+      stu_2: {
+        1: ['sub_f_mathe', 'sub_f_deu', 'sub_f_nwa'],
+        2: ['sub_f_deu', 'sub_f_eng', 'sub_f_mathe'],
+        3: ['sub_f_mathe', 'sub_f_nwa', 'sub_f_deu'],
+        4: ['sub_f_eng', 'sub_f_mathe', 'sub_f_nwa'],
+        5: ['sub_f_deu', 'sub_f_mathe', 'sub_f_eng'],
+      },
+    },
+    topics: [
+      {
+        id: 'top_e_1',
+        student_id: 'stu_1',
+        subject_id: 'sub_e_mathe',
+        title: 'Bruchrechnung & Rationale Zahlen (Fracciones)',
+        updated_at: Date.now() - 86400000,
+        subtopics: [
+          {
+            id: 'subtop_e_1_1',
+            title: 'Adición y sustracción con distinto denominador (Hauptnenner)',
+            comprehension: 3,
+            next_recall_date: today,
+            interval_days: 3,
+            notes: 'Buscar primero el mínimo común múltiplo (kgV) antes de sumar numeradores.',
+            created_at: twoDaysAgo,
+            review_count: 2,
+            updated_at: Date.now() - 72000000,
+          },
+          {
+            id: 'subtop_e_1_2',
+            title: 'División multiplicando por la inversa (Kehrwert)',
+            comprehension: 1,
+            next_recall_date: today,
+            interval_days: 1,
+            notes: 'En la división se multiplica por el Kehrwert de la SEGUNDA fracción.',
+            created_at: yesterday,
+            review_count: 1,
+            updated_at: Date.now() - 36000000,
+          },
+        ],
+      },
+      {
+        id: 'top_f_1',
+        student_id: 'stu_2',
+        subject_id: 'sub_f_mathe',
+        title: 'Geometrie: Umfang und Flächeninhalt',
+        updated_at: Date.now() - 40000000,
+        subtopics: [
+          {
+            id: 'subtop_f_1_1',
+            title: 'Perímetro (Umfang) vs Área (Flächeninhalt) del rectángulo',
+            comprehension: 2,
+            next_recall_date: today,
+            interval_days: 2,
+            notes: 'Umfang = 2*a + 2*b (cm). Flächeninhalt = a * b (cm²).',
+            created_at: yesterday,
+            review_count: 1,
+            updated_at: Date.now() - 25000000,
+          },
+        ],
+      },
+    ],
+    work_logs: [
+      { id: 'log_1', student_id: 'stu_1', subject_id: 'sub_e_mathe', topic_id: 'top_e_1', subtopic_id: 'subtop_e_1_1', date: twoDaysAgo, minutes: 30, note: 'Ejercicios del libro', updated_at: Date.now() - 90000000 },
+      { id: 'log_2', student_id: 'stu_1', subject_id: 'sub_e_mathe', topic_id: 'top_e_1', subtopic_id: 'subtop_e_1_2', date: yesterday, minutes: 40, note: 'Ficha de repaso', updated_at: Date.now() - 40000000 },
+      { id: 'log_3', student_id: 'stu_2', subject_id: 'sub_f_mathe', topic_id: 'top_f_1', subtopic_id: 'subtop_f_1_1', date: yesterday, minutes: 25, note: 'Cálculo de áreas', updated_at: Date.now() - 35000000 },
+    ],
+    tasks: [
+      { id: 'tsk_1', student_id: 'stu_1', subject_id: 'sub_e_mathe', title: 'Arbeitsblatt Bruchrechnung (Ej. 3 y 4)', due_date: today, priority: 'high', completed: false, updated_at: Date.now() - 20000000 },
+      { id: 'tsk_2', student_id: 'stu_2', subject_id: 'sub_f_mathe', title: 'Libro pág. 45 nº 1 a 4', due_date: addDaysStr(today, 1), priority: 'medium', completed: false, updated_at: Date.now() - 15000000 },
+    ],
+    exams: [
+      {
+        id: 'ex_1',
+        student_id: 'stu_1',
+        subject_id: 'sub_e_mathe',
+        title: '2. Klassenarbeit: Bruchrechnung',
+        exam_date: in3Days,
+        topic_ids: ['top_e_1'],
+        subtopic_ids: ['subtop_e_1_1', 'subtop_e_1_2'],
+        post_exam_feeling: null,
+        post_exam_comment: '',
+        grade_label: null,
+        grade_value: null,
+        updated_at: Date.now() - 50000000,
+      },
+      {
+        id: 'ex_2',
+        student_id: 'stu_2',
+        subject_id: 'sub_f_mathe',
+        title: 'Klassenarbeit: Geometrie',
+        exam_date: in6Days,
+        topic_ids: ['top_f_1'],
+        subtopic_ids: ['subtop_f_1_1'],
+        post_exam_feeling: null,
+        post_exam_comment: '',
+        grade_label: null,
+        grade_value: null,
+        updated_at: Date.now() - 40000000,
+      },
+    ],
+  };
+};
+
+const mergeArraysById = (localArr = [], remoteArr = []) => {
+  const map = new Map();
+  localArr.forEach((item) => map.set(item.id, item));
+  remoteArr.forEach((rem) => {
+    const existing = map.get(rem.id);
+    if (!existing || (rem.updated_at || 0) >= (existing.updated_at || 0)) {
+      map.set(rem.id, rem);
+    }
+  });
+  return Array.from(map.values());
+};
+
+const smartMergeTopics = (localTopics = [], remoteTopics = []) => {
+  const map = new Map();
+  localTopics.forEach((t) => map.set(t.id, { ...t, subtopics: [...(t.subtopics || [])] }));
+  remoteTopics.forEach((remT) => {
+    const existing = map.get(remT.id);
+    if (!existing) {
+      map.set(remT.id, remT);
+    } else {
+      const mergedSubtopics = mergeArraysById(existing.subtopics || [], remT.subtopics || []);
+      const newerTopic = (remT.updated_at || 0) >= (existing.updated_at || 0) ? remT : existing;
+      map.set(remT.id, {
+        ...newerTopic,
+        subtopics: mergedSubtopics,
+        updated_at: Math.max(existing.updated_at || 0, remT.updated_at || 0),
+      });
+    }
+  });
+  return Array.from(map.values());
+};
+
+const smartMergeState = (localState, remoteState) => {
+  if (!remoteState || !remoteState.students) return localState;
+  return {
+    lastUpdated: Date.now(),
+    students: mergeArraysById(localState.students, remoteState.students),
+    subjects: mergeArraysById(localState.subjects, remoteState.subjects),
+    schedules: {
+      ...localState.schedules,
+      ...(remoteState.schedules || {}),
+    },
+    topics: smartMergeTopics(localState.topics, remoteState.topics),
+    work_logs: mergeArraysById(localState.work_logs, remoteState.work_logs),
+    tasks: mergeArraysById(localState.tasks, remoteState.tasks),
+    exams: mergeArraysById(localState.exams, remoteState.exams),
+  };
+};
+
+// ============================================================================
+// COMPONENTE PRINCIPAL
+// ============================================================================
+function App() {
+  const [appData, setAppData] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return createInitialData();
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [appData]);
+
+  const [activeProfile, setActiveProfile] = useState('parent');
+  const [parentSelectedStudent, setParentSelectedStudent] = useState('stu_1');
+  const [activeTab, setActiveTab] = useState('today');
+
+  const currentStudentId = activeProfile === 'parent' ? parentSelectedStudent : activeProfile;
+  const currentStudent = useMemo(
+    () => appData.students.find((s) => s.id === currentStudentId) || appData.students[0],
+    [appData.students, currentStudentId]
+  );
+
+  const [recapWizardOpen, setRecapWizardOpen] = useState(false);
+  const [recapStudentId, setRecapStudentId] = useState('stu_1');
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [quickTimeModal, setQuickTimeModal] = useState(null);
+  const [editProfileModal, setEditProfileModal] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3200);
+  };
+
+  const openRecapForStudent = (stuId) => {
+    setRecapStudentId(stuId);
+    setRecapWizardOpen(true);
+  };
+
+  const addWorkLog = ({ student_id, subject_id, topic_id, subtopic_id = null, date, minutes, note }) => {
+    const newLog = {
+      id: uid('log'),
+      student_id,
+      subject_id,
+      topic_id,
+      subtopic_id,
+      date: date || toDateStr(),
+      minutes: Number(minutes) || 15,
+      note: note || '',
+      updated_at: Date.now(),
+    };
+    setAppData((prev) => ({
+      ...prev,
+      lastUpdated: Date.now(),
+      work_logs: [newLog, ...prev.work_logs],
+    }));
+    showToast(`⏱️ +${minutes}m registrados (${formatHumanDate(date || toDateStr())})`);
+  };
+
+  const upsertTopicAndSubtopic = ({
+    student_id,
+    subject_id,
+    topicIdOrNew,
+    newTopicTitle,
+    subtopicTitle,
+    comprehension,
+    minutes,
+    notes,
+    date,
+  }) => {
+    const compObj = COMPREHENSION_LEVELS.find((c) => c.id === comprehension) || COMPREHENSION_LEVELS[1];
+    const nextRecallDate = addDaysStr(toDateStr(), compObj.days);
+    const now = Date.now();
+    let targetTopicId = topicIdOrNew;
+    const newSubId = uid('subtop');
+
+    const newSubtopic = {
+      id: newSubId,
+      title: subtopicTitle.trim(),
+      comprehension,
+      next_recall_date: nextRecallDate,
+      interval_days: compObj.days,
+      notes: notes || '',
+      created_at: date || toDateStr(),
+      review_count: 0,
+      updated_at: now,
+    };
+
+    setAppData((prev) => {
+      let updatedTopics = [...prev.topics];
+      if (topicIdOrNew === 'NEW' || !topicIdOrNew) {
+        targetTopicId = uid('top');
+        updatedTopics.unshift({
+          id: targetTopicId,
+          student_id,
+          subject_id,
+          title: newTopicTitle.trim(),
+          updated_at: now,
+          subtopics: [newSubtopic],
+        });
+      } else {
+        updatedTopics = updatedTopics.map((t) => {
+          if (t.id !== topicIdOrNew) return t;
+          return {
+            ...t,
+            updated_at: now,
+            subtopics: [...t.subtopics, newSubtopic],
+          };
+        });
+      }
+
+      const updatedLogs = [...prev.work_logs];
+      if (Number(minutes) > 0) {
+        updatedLogs.unshift({
+          id: uid('log'),
+          student_id,
+          subject_id,
+          topic_id: targetTopicId,
+          subtopic_id: newSubId,
+          date: date || toDateStr(),
+          minutes: Number(minutes),
+          note: notes ? `Recap: ${subtopicTitle}` : 'Estudio / Recap diario',
+          updated_at: now,
+        });
+      }
+
+      return {
+        ...prev,
+        lastUpdated: now,
+        topics: updatedTopics,
+        work_logs: updatedLogs,
+      };
+    });
+
+    showToast(`✅ Subtema guardado en Active Recall (${compObj.days}d)`);
+  };
+
+  const rateSubtopicRecall = ({ student_id, topic_id, subtopic_id, rating, minutesSpent }) => {
+    const today = toDateStr();
+    const now = Date.now();
+
+    setAppData((prev) => {
+      let subjectIdForLog = null;
+      const updatedTopics = prev.topics.map((t) => {
+        if (t.id !== topic_id) return t;
+        subjectIdForLog = t.subject_id;
+        return {
+          ...t,
+          updated_at: now,
+          subtopics: t.subtopics.map((st) => {
+            if (st.id !== subtopic_id) return st;
+            const prevInterval = st.interval_days || 1;
+            let nextDays = 1;
+            if (rating === 1) nextDays = 1;
+            if (rating === 2) nextDays = Math.max(2, Math.round(prevInterval * 1.2));
+            if (rating === 3) nextDays = Math.max(4, Math.round(prevInterval * 1.8));
+            if (rating === 4) nextDays = Math.max(7, Math.round(prevInterval * 2.5));
+
+            return {
+              ...st,
+              comprehension: rating,
+              interval_days: nextDays,
+              next_recall_date: addDaysStr(today, nextDays),
+              review_count: (st.review_count || 0) + 1,
+              updated_at: now,
+            };
+          }),
+        };
+      });
+
+      const updatedLogs = [...prev.work_logs];
+      if (Number(minutesSpent) > 0 && subjectIdForLog) {
+        updatedLogs.unshift({
+          id: uid('log'),
+          student_id,
+          subject_id: subjectIdForLog,
+          topic_id,
+          subtopic_id,
+          date: today,
+          minutes: Number(minutesSpent),
+          note: 'Sesión de Active Recall con Papá',
+          updated_at: now,
+        });
+      }
+
+      return {
+        ...prev,
+        lastUpdated: now,
+        topics: updatedTopics,
+        work_logs: updatedLogs,
+      };
+    });
+
+    showToast('⚡ Repaso registrado y próximo intervalo actualizado');
+  };
+
+  const getExamUrgencyInfo = (examDateStr) => {
+    const daysLeft = diffDaysFromToday(examDateStr);
+    if (daysLeft < 0) {
+      return { daysLeft, level: 'past', badge: 'Pasado', bannerColor: 'bg-slate-100 border-slate-300 text-slate-700', alertText: `Realizado hace ${Math.abs(daysLeft)} día(s)` };
+    }
+    if (daysLeft === 0) {
+      return { daysLeft, level: 'today', badge: '🔴 ¡HOY ES EL EXAMEN!', bannerColor: 'bg-red-600 text-white border-red-700 animate-pulse', alertText: 'Alerta máxima: Hoy es este examen.' };
+    }
+    if (daysLeft === 1) {
+      return { daysLeft, level: 'tomorrow', badge: '🔴 ¡MAÑANA ES EL EXAMEN!', bannerColor: 'bg-red-500 text-white border-red-600', alertText: 'Alerta máxima: Repaso final hoy.' };
+    }
+    if (daysLeft <= 3) {
+      return { daysLeft, level: '3days', badge: `🟠 Faltan ${daysLeft} días`, bannerColor: 'bg-orange-500 text-white border-orange-600', alertText: 'Prioridad total en Active Recall.' };
+    }
+    if (daysLeft <= 7) {
+      return { daysLeft, level: '7days', badge: `🟡 Faltan ${daysLeft} días`, bannerColor: 'bg-amber-100 text-amber-950 border-amber-400', alertText: 'Subtemas priorizados en Active Recall.' };
+    }
+    if (daysLeft <= 14) {
+      return { daysLeft, level: '14days', badge: `🟢 Faltan ${daysLeft} días`, bannerColor: 'bg-emerald-50 text-emerald-900 border-emerald-300', alertText: 'Planificación abierta.' };
+    }
+    return { daysLeft, level: 'later', badge: `🗓️ En ${daysLeft} días`, bannerColor: 'bg-slate-50 text-slate-700 border-slate-200', alertText: 'Programado en calendario.' };
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-100 text-slate-900 pb-24 select-none">
+      {/* BARRA SUPERIOR MULTI-PERFIL STICKY */}
+      <header className="sticky top-0 z-30 bg-slate-900 text-white shadow-lg border-b border-slate-800">
+        <div className="max-w-5xl mx-auto px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-emerald-500 flex items-center justify-center font-bold text-lg shadow">
+                🎒
+              </div>
+              <div>
+                <h1 className="font-bold text-sm sm:text-base leading-tight tracking-tight flex items-center gap-1.5">
+                  SchulFamilie
+                  <span className="text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+                    Local-First
+                  </span>
+                </h1>
+                <p className="text-[11px] text-slate-400 leading-none mt-0.5">
+                  Enrique &amp; Fernando • Stundenplan &amp; Recall
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setScheduleModalOpen(true)}
+                className="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white flex items-center gap-1 shadow-sm active:scale-95 transition"
+                title="Configurar Horario Escolar (Stundenplan)"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>Horario</span>
+              </button>
+              <button
+                onClick={() => setEditProfileModal(true)}
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 active:scale-95 transition"
+                title="Ajustes de Cursos y Asignaturas"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* SELECTOR DE PERFIL: ENRIQUE / FERNANDO / MODO PADRE */}
+          <div className="grid grid-cols-3 gap-1.5 bg-slate-950/70 p-1 rounded-xl border border-slate-800">
+            {appData.students.map((stu) => {
+              const isSelected = activeProfile === stu.id;
+              return (
+                <button
+                  key={stu.id}
+                  onClick={() => {
+                    setActiveProfile(stu.id);
+                    setParentSelectedStudent(stu.id);
+                  }}
+                  className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold transition-all active:scale-95 ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white shadow-md ring-1 ring-indigo-400'
+                      : 'text-slate-300 hover:bg-slate-800/70'
+                  }`}
+                >
+                  <span className="text-base leading-none">{stu.avatar}</span>
+                  <span className="truncate">{stu.name}</span>
+                </button>
+              );
+            })}
+
+            <button
+              onClick={() => setActiveProfile('parent')}
+              className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg text-xs font-semibold transition-all active:scale-95 ${
+                activeProfile === 'parent'
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-md ring-1 ring-amber-300'
+                  : 'text-amber-300/90 hover:bg-slate-800/70'
+              }`}
+            >
+              <span className="text-base leading-none">👨‍👦‍👦</span>
+              <span className="truncate">Modo Padre</span>
+            </button>
+          </div>
+
+          {/* SUB-BARRA EN MODO PADRE PARA ALTERNAR ENTRE ENRIQUE Y FERNANDO */}
+          {activeProfile === 'parent' && (
+            <div className="mt-2 pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
+              <span className="text-[11px] text-amber-300 font-medium flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5" /> Supervisando a:
+              </span>
+              <div className="flex items-center gap-1">
+                {appData.students.map((stu) => (
+                  <button
+                    key={stu.id}
+                    onClick={() => setParentSelectedStudent(stu.id)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-semibold transition ${
+                      parentSelectedStudent === stu.id
+                        ? 'bg-amber-500 text-slate-950 shadow-sm'
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {stu.avatar} {stu.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* CONTENIDO PRINCIPAL */}
+      <main className="max-w-5xl mx-auto px-3 pt-4">
+        {activeTab === 'today' && (
+          <TodayAndParentDashboard
+            appData={appData}
+            activeProfile={activeProfile}
+            currentStudent={currentStudent}
+            setParentSelectedStudent={setParentSelectedStudent}
+            openRecapForStudent={openRecapForStudent}
+            setScheduleModalOpen={setScheduleModalOpen}
+            setActiveTab={setActiveTab}
+            setQuickTimeModal={setQuickTimeModal}
+            getExamUrgencyInfo={getExamUrgencyInfo}
+            setAppData={setAppData}
+            showToast={showToast}
+          />
+        )}
+
+        {activeTab === 'topics' && (
+          <TopicsAndTasksView
+            appData={appData}
+            currentStudent={currentStudent}
+            setAppData={setAppData}
+            upsertTopicAndSubtopic={upsertTopicAndSubtopic}
+            setQuickTimeModal={setQuickTimeModal}
+            showToast={showToast}
+          />
+        )}
+
+        {activeTab === 'recall' && (
+          <ActiveRecallParentView
+            appData={appData}
+            activeProfile={activeProfile}
+            currentStudent={currentStudent}
+            setParentSelectedStudent={setParentSelectedStudent}
+            rateSubtopicRecall={rateSubtopicRecall}
+            getExamUrgencyInfo={getExamUrgencyInfo}
+          />
+        )}
+
+        {activeTab === 'exams' && (
+          <ExamsAndGermanGradesView
+            appData={appData}
+            activeProfile={activeProfile}
+            currentStudent={currentStudent}
+            setAppData={setAppData}
+            getExamUrgencyInfo={getExamUrgencyInfo}
+            showToast={showToast}
+            setActiveTab={setActiveTab}
+          />
+        )}
+
+        {activeTab === 'stats' && (
+          <StatsAndP2PSyncView
+            appData={appData}
+            currentStudent={currentStudent}
+            setAppData={setAppData}
+            showToast={showToast}
+          />
+        )}
+      </main>
+
+      {/* BARRA DE NAVEGACIÓN INFERIOR NATIVA ANDROID */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+        <div className="max-w-5xl mx-auto grid grid-cols-5">
+          {[
+            { id: 'today',  label: 'Hoy / Recap', icon: Sparkles },
+            { id: 'topics', label: 'Temas',       icon: BookOpen },
+            { id: 'recall', label: 'Recall',      icon: Brain, highlight: true },
+            { id: 'exams',  label: 'Exámenes',    icon: GraduationCap },
+            { id: 'stats',  label: 'Horas / P2P', icon: RefreshCw },
+          ].map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`flex flex-col items-center justify-center py-2 px-1 transition-all active:scale-95 ${
+                  isActive ? 'text-indigo-600 font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'
+                }`}
+              >
+                <div
+                  className={`p-1.5 rounded-xl transition-all ${
+                    isActive
+                      ? item.highlight ? 'bg-amber-500 text-white shadow-sm' : 'bg-indigo-100 text-indigo-700'
+                      : item.highlight ? 'bg-amber-50 text-amber-700' : ''
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                </div>
+                <span className="text-[11px] mt-0.5 leading-tight truncate">
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* MODAL CONFIGURADOR DE HORARIO SEMANAL EDITABLE INDIVIDUALMENTE */}
+      {scheduleModalOpen && (
+        <ScheduleConfigModal
+          appData={appData}
+          currentStudent={currentStudent}
+          setAppData={setAppData}
+          onClose={() => setScheduleModalOpen(false)}
+          showToast={showToast}
+        />
+      )}
+
+      {/* MODAL AJUSTES DE PERFILES, CURSOS Y ASIGNATURAS */}
+      {editProfileModal && (
+        <EditProfilesAndSubjectsModal
+          appData={appData}
+          setAppData={setAppData}
+          onClose={() => setEditProfileModal(false)}
+          showToast={showToast}
+        />
+      )}
+
+      {/* MODAL RECAP */}
+      {recapWizardOpen && (
+        <DailyRecapWizardModal
+          appData={appData}
+          studentId={recapStudentId}
+          onClose={() => setRecapWizardOpen(false)}
+          upsertTopicAndSubtopic={upsertTopicAndSubtopic}
+        />
+      )}
+
+      {/* MODAL AÑADIR TIEMPO */}
+      {quickTimeModal && (
+        <QuickAddTimeModal
+          target={quickTimeModal}
+          onClose={() => setQuickTimeModal(null)}
+          onSave={(payload) => {
+            addWorkLog(payload);
+            setQuickTimeModal(null);
+          }}
+        />
+      )}
+
+      {/* TOAST FLOTANTE */}
+      {toastMessage && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-full shadow-2xl border border-slate-700 text-xs sm:text-sm font-bold flex items-center gap-2 animate-bounce">
+          <span>{toastMessage}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// MODAL: CONFIGURADOR DE HORARIO SEMANAL EDITABLE POR ALUMNO
+// ============================================================================
+function ScheduleConfigModal({ appData, currentStudent, setAppData, onClose, showToast }) {
+  const [selectedStuId, setSelectedStuId] = useState(currentStudent.id);
+  const [selectedDay, setSelectedDay] = useState(1); // 1 = Lunes .. 5 = Viernes
+
+  const activeStudent = appData.students.find((s) => s.id === selectedStuId) || appData.students[0];
+  const studentSubjects = appData.subjects.filter((s) => s.student_id === selectedStuId);
+  const dayScheduleIds = (appData.schedules[selectedStuId] && appData.schedules[selectedStuId][selectedDay]) || [];
+
+  const addSubjectToDay = (subjId) => {
+    setAppData((prev) => {
+      const stuSched = prev.schedules[selectedStuId] || {};
+      const currentList = stuSched[selectedDay] || [];
+      return {
+        ...prev,
+        lastUpdated: Date.now(),
+        schedules: {
+          ...prev.schedules,
+          [selectedStuId]: {
+            ...stuSched,
+            [selectedDay]: [...currentList, subjId],
+          },
+        },
+      };
+    });
+    showToast('Asignatura añadida al horario');
+  };
+
+  const removeSubjectAtIndex = (idx) => {
+    setAppData((prev) => {
+      const stuSched = prev.schedules[selectedStuId] || {};
+      const currentList = stuSched[selectedDay] || [];
+      return {
+        ...prev,
+        lastUpdated: Date.now(),
+        schedules: {
+          ...prev.schedules,
+          [selectedStuId]: {
+            ...stuSched,
+            [selectedDay]: currentList.filter((_, i) => i !== idx),
+          },
+        },
+      };
+    });
+    showToast('Asignatura eliminada del día');
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3">
+      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+          <div>
+            <span className="text-[10px] uppercase font-bold text-indigo-300">
+              📅 Stundenplan (Horario Escolar)
+            </span>
+            <h3 className="font-bold text-base">Configurar Clases de la Semana</h3>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-800 text-slate-300">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4 overflow-y-auto">
+          {/* SELECTOR DE ALUMNO: ENRIQUE O FERNANDO */}
+          <div>
+            <label className="block text-xs font-extrabold uppercase text-slate-500 mb-1.5">
+              1. Selecciona a qué hijo configuras el horario:
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {appData.students.map((stu) => (
+                <button
+                  key={stu.id}
+                  onClick={() => setSelectedStuId(stu.id)}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold border flex items-center justify-center gap-1.5 transition ${
+                    selectedStuId === stu.id
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className="text-base">{stu.avatar}</span>
+                  <span>{stu.name}</span>
+                  <span className="text-[10px] opacity-75">({stu.gradeLevel.split(' ')[0]})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* SELECTOR DE DÍA (LUNES A VIERNES) */}
+          <div>
+            <label className="block text-xs font-extrabold uppercase text-slate-500 mb-1.5">
+              2. Día de la semana:
+            </label>
+            <div className="grid grid-cols-5 gap-1 bg-slate-100 p-1 rounded-xl">
+              {WEEKDAYS.map((d) => (
+                <button
+                  key={d.key}
+                  onClick={() => setSelectedDay(d.key)}
+                  className={`py-2 rounded-lg text-xs font-extrabold transition ${
+                    selectedDay === d.key
+                      ? 'bg-white text-indigo-700 shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <div>{d.short}</div>
+                  <div className="text-[9px] font-normal opacity-70">{d.de.slice(0, 2)}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* LISTA DE CLASES CONFIGURADAS ESE DÍA */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-extrabold uppercase text-slate-700">
+                Clases del {WEEKDAYS.find((w) => w.key === selectedDay)?.name} ({activeStudent.name}):
+              </span>
+              <span className="text-[11px] text-slate-400">
+                {dayScheduleIds.length} hora(s)
+              </span>
+            </div>
+
+            {dayScheduleIds.length === 0 ? (
+              <div className="text-center py-4 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-xs text-slate-500">
+                No hay asignaturas añadidas este día. Pulsa en las asignaturas de abajo para agregarlas.
+              </div>
+            ) : (
+              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                {dayScheduleIds.map((subId, idx) => {
+                  const subj = appData.subjects.find((s) => s.id === subId);
+                  return (
+                    <div
+                      key={`${subId}_${idx}`}
+                      className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-800 font-bold flex items-center justify-center text-[10px]">
+                          {idx + 1}
+                        </span>
+                        <span className="font-bold text-slate-800">
+                          {subj?.icon} {subj?.name || 'Asignatura'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => removeSubjectAtIndex(idx)}
+                        className="text-red-500 hover:text-red-700 p-1 text-xs font-bold"
+                        title="Quitar esta hora"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* AÑADIR ASIGNATURAS CON UN TOQUE */}
+          <div>
+            <label className="block text-xs font-extrabold uppercase text-slate-700 mb-1.5">
+              ➕ Toca para añadir al {WEEKDAYS.find((w) => w.key === selectedDay)?.name}:
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {studentSubjects.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => addSubjectToDay(s.id)}
+                  className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 text-xs font-bold flex items-center gap-1 active:scale-95 transition"
+                >
+                  <span>{s.icon}</span>
+                  <span>{s.name}</span>
+                  <span className="text-indigo-400 font-black">+</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-between items-center">
+          <span className="text-[11px] text-slate-500">Se guarda automáticamente</span>
+          <button
+            onClick={() => {
+              showToast('📅 Horario actualizado correctamente');
+              onClose();
+            }}
+            className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow"
+          >
+            Listo / Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// MODAL: AJUSTES DE PERFILES, CURSOS Y ASIGNATURAS (PARA FUTUROS CURSOS)
+// ============================================================================
+function EditProfilesAndSubjectsModal({ appData, setAppData, onClose, showToast }) {
+  const [stu1Name, setStu1Name] = useState(appData.students[0]?.name || 'Enrique');
+  const [stu1Grade, setStu1Grade] = useState(appData.students[0]?.gradeLevel || '7. Klasse (Gymnasium)');
+  const [stu2Name, setStu2Name] = useState(appData.students[1]?.name || 'Fernando');
+  const [stu2Grade, setStu2Grade] = useState(appData.students[1]?.gradeLevel || '5. Klasse (Realschule)');
+
+  const [newSubjStudent, setNewSubjStudent] = useState('stu_1');
+  const [newSubjName, setNewSubjName] = useState('');
+  const [newSubjIcon, setNewSubjIcon] = useState('📘');
+
+  const saveProfiles = () => {
+    setAppData((prev) => ({
+      ...prev,
+      lastUpdated: Date.now(),
+      students: prev.students.map((s, idx) =>
+        idx === 0
+          ? { ...s, name: stu1Name.trim() || 'Enrique', gradeLevel: stu1Grade, updated_at: Date.now() }
+          : { ...s, name: stu2Name.trim() || 'Fernando', gradeLevel: stu2Grade, updated_at: Date.now() }
+      ),
+    }));
+    showToast('👥 Perfiles y cursos actualizados');
+    onClose();
+  };
+
+  const handleAddSubject = () => {
+    if (!newSubjName.trim()) return;
+    const newSub = {
+      id: uid('sub'),
+      student_id: newSubjStudent,
+      name: newSubjName.trim(),
+      icon: newSubjIcon || '📘',
+      color: 'bg-indigo-600',
+      updated_at: Date.now(),
+    };
+    setAppData((prev) => ({
+      ...prev,
+      lastUpdated: Date.now(),
+      subjects: [...prev.subjects, newSub],
+    }));
+    setNewSubjName('');
+    showToast(`📚 Asignatura ${newSub.name} creada`);
+  };
+
+  const handleDeleteSubject = (subjId) => {
+    setAppData((prev) => ({
+      ...prev,
+      lastUpdated: Date.now(),
+      subjects: prev.subjects.filter((s) => s.id !== subjId),
+    }));
+    showToast('Asignatura eliminada');
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3">
+      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+          <div>
+            <span className="text-[10px] uppercase font-bold text-amber-400">⚙️ Cursos &amp; Asignaturas</span>
+            <h3 className="font-bold text-base">Adaptar para Nuevos Cursos</h3>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-800 text-slate-300">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4 overflow-y-auto">
+          {/* HIJO 1: ENRIQUE */}
+          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <div className="text-xs font-bold text-indigo-700 flex items-center gap-1">
+              👦🏻 Alumno 1 (Nombre y Curso):
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                value={stu1Name}
+                onChange={(e) => setStu1Name(e.target.value)}
+                placeholder="Nombre"
+                className="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-bold"
+              />
+              <input
+                type="text"
+                value={stu1Grade}
+                onChange={(e) => setStu1Grade(e.target.value)}
+                placeholder="Ej. 7. Klasse o 8. Klasse"
+                className="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold"
+              />
+            </div>
+          </div>
+
+          {/* HIJO 2: FERNANDO */}
+          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+            <div className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+              👦🏼 Alumno 2 (Nombre y Curso):
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                value={stu2Name}
+                onChange={(e) => setStu2Name(e.target.value)}
+                placeholder="Nombre"
+                className="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-bold"
+              />
+              <input
+                type="text"
+                value={stu2Grade}
+                onChange={(e) => setStu2Grade(e.target.value)}
+                placeholder="Ej. 5. Klasse o 6. Klasse"
+                className="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold"
+              />
+            </div>
+          </div>
+
+          {/* AÑADIR NUEVA ASIGNATURA PARA CURSOS SUPERIORES */}
+          <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-200 space-y-2">
+            <div className="text-xs font-bold text-indigo-900">
+              ➕ Añadir Nueva Asignatura (ej. Physik, Chemie, Französisch...):
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              <select
+                value={newSubjStudent}
+                onChange={(e) => setNewSubjStudent(e.target.value)}
+                className="rounded-xl border border-indigo-200 px-2 py-1.5 text-xs font-bold bg-white"
+              >
+                {appData.students.map((s) => (
+                  <option key={s.id} value={s.id}>Para {s.name}</option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={newSubjIcon}
+                onChange={(e) => setNewSubjIcon(e.target.value)}
+                placeholder="Emoji ⚗️"
+                className="rounded-xl border border-indigo-200 px-2 py-1.5 text-xs text-center bg-white"
+              />
+              <input
+                type="text"
+                value={newSubjName}
+                onChange={(e) => setNewSubjName(e.target.value)}
+                placeholder="Ej. Physik"
+                className="rounded-xl border border-indigo-200 px-2 py-1.5 text-xs bg-white font-semibold"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleAddSubject}
+              className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-sm"
+            >
+              + Crear Asignatura
+            </button>
+          </div>
+
+          {/* LISTA ACTUAL DE ASIGNATURAS */}
+          <div>
+            <div className="text-xs font-bold text-slate-600 mb-2">Asignaturas actuales:</div>
+            <div className="space-y-1 max-h-36 overflow-y-auto">
+              {appData.subjects.map((subj) => {
+                const owner = appData.students.find((s) => s.id === subj.student_id);
+                return (
+                  <div key={subj.id} className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                    <span>{subj.icon} <strong>{subj.name}</strong> <span className="text-slate-400">({owner?.name})</span></span>
+                    <button onClick={() => handleDeleteSubject(subj.id)} className="text-red-500 hover:text-red-700 px-2 font-bold">✕</button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={async () => {
+              if ("serviceWorker" in navigator) {
+                const regs = await navigator.serviceWorker.getRegistrations();
+                for (const r of regs) await r.unregister();
+              }
+              if ("caches" in window) {
+                const keys = await caches.keys();
+                for (const k of keys) await caches.delete(k);
+              }
+              window.location.reload(true);
+            }}
+            className="px-3 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-bold"
+            title="Descarga los últimos cambios visuales manteniendo todos tus datos guardados"
+          >
+            🔄 Refrescar App (sin borrar datos)
+          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={onClose} className="px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold">Cancelar</button>
+            <button onClick={saveProfiles} className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow">Guardar Cambios</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// VISTA 1: HOY / RECAP DIARIO Y SUPERVISOR PADRE
+// ============================================================================
+function TodayAndParentDashboard({
+  appData,
+  activeProfile,
+  currentStudent,
+  setParentSelectedStudent,
+  openRecapForStudent,
+  setScheduleModalOpen,
+  setActiveTab,
+  setQuickTimeModal,
+  getExamUrgencyInfo,
+  setAppData,
+  showToast,
+}) {
+  const todayStr = toDateStr();
+  const yesterdayStr = addDaysStr(todayStr, -1);
+  const jsDay = new Date().getDay();
+  const activeWeekday = jsDay >= 1 && jsDay <= 5 ? jsDay : 1;
+  const [selectedDayKey, setSelectedDayKey] = useState(activeWeekday);
+
+  const studentScheduleIds = (appData.schedules[currentStudent.id] && appData.schedules[currentStudent.id][selectedDayKey]) || [];
+  const todaySubjects = studentScheduleIds.map((id) => appData.subjects.find((s) => s.id === id)).filter(Boolean);
+
+  const upcomingExams = appData.exams
+    .filter((ex) => ex.student_id === currentStudent.id && diffDaysFromToday(ex.exam_date) >= 0)
+    .sort((a, b) => a.exam_date.localeCompare(b.exam_date));
+
+  const getStudentQuickStats = (stuId) => {
+    const todayMins = appData.work_logs.filter((l) => l.student_id === stuId && l.date === todayStr).reduce((a, b) => a + b.minutes, 0);
+    const yesterdayMins = appData.work_logs.filter((l) => l.student_id === stuId && l.date === yesterdayStr).reduce((a, b) => a + b.minutes, 0);
+    const allSubs = appData.topics.filter((t) => t.student_id === stuId).flatMap((t) => t.subtopics);
+    const dueRecall = allSubs.filter((st) => st.next_recall_date <= todayStr).length;
+    const weakCount = allSubs.filter((st) => st.comprehension <= 2).length;
+    const nextExam = appData.exams.filter((e) => e.student_id === stuId && diffDaysFromToday(e.exam_date) >= 0).sort((a, b) => a.exam_date.localeCompare(b.exam_date))[0];
+    return { todayMins, yesterdayMins, dueRecall, weakCount, nextExam };
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* MODO PADRE: COMPARATIVA ENRIQUE VS FERNANDO */}
+      {activeProfile === 'parent' && (
+        <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-4 shadow-md border border-slate-700">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <span className="text-[11px] uppercase tracking-wider font-bold text-amber-400 flex items-center gap-1">
+                <Users className="w-3.5 h-3.5" /> Panel Familiar del Padre
+              </span>
+              <h2 className="text-base sm:text-lg font-bold">
+                Seguimiento Hoy ({formatHumanDate(todayStr)})
+              </h2>
+            </div>
+            <button
+              onClick={() => setActiveTab('recall')}
+              className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1 shadow"
+            >
+              <Brain className="w-4 h-4" /> Preguntar
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {appData.students.map((stu) => {
+              const st = getStudentQuickStats(stu.id);
+              const isFocused = currentStudent.id === stu.id;
+              return (
+                <div
+                  key={stu.id}
+                  onClick={() => setParentSelectedStudent(stu.id)}
+                  className={`cursor-pointer rounded-xl p-3 transition border ${
+                    isFocused ? 'bg-white/15 border-amber-400 ring-1 ring-amber-400/50' : 'bg-white/5 border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">{stu.avatar}</span>
+                      <div>
+                        <h3 className="font-bold text-sm leading-tight">{stu.name}</h3>
+                        <p className="text-[11px] text-slate-300">{stu.gradeLevel}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openRecapForStudent(stu.id);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white text-[11px] font-semibold flex items-center gap-1"
+                    >
+                      <Sparkles className="w-3 h-3" /> Recap
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1.5 text-center my-2">
+                    <div className="bg-slate-900/60 rounded-lg p-1.5">
+                      <div className="text-xs font-bold text-emerald-400">{formatMinutes(st.todayMins)}</div>
+                      <div className="text-[10px] text-slate-400">Hoy (Ayer {formatMinutes(st.yesterdayMins)})</div>
+                    </div>
+                    <div className="bg-slate-900/60 rounded-lg p-1.5">
+                      <div className="text-xs font-bold text-amber-400">{st.dueRecall}</div>
+                      <div className="text-[10px] text-slate-400">Por preguntar</div>
+                    </div>
+                    <div className="bg-slate-900/60 rounded-lg p-1.5">
+                      <div className="text-xs font-bold text-rose-400">{st.weakCount}</div>
+                      <div className="text-[10px] text-slate-400">Flojos 🔴/🟠</div>
+                    </div>
+                  </div>
+
+                  {st.nextExam ? (
+                    <div className="text-[11px] bg-amber-500/20 border border-amber-400/30 text-amber-200 px-2.5 py-1 rounded-lg flex items-center justify-between">
+                      <span className="truncate">🎓 {st.nextExam.title}</span>
+                      <span className="font-bold ml-1 shrink-0">en {diffDaysFromToday(st.nextExam.exam_date)}d</span>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-slate-400 italic">Sin exámenes próximos</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* RUTINA DE TARDE: RECAP GUIADO */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-indigo-100">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold mb-1">
+              <Sparkles className="w-3.5 h-3.5" /> Recap Diario • {currentStudent.avatar} {currentStudent.name}
+            </div>
+            <h2 className="text-base sm:text-lg font-extrabold text-slate-900">
+              ¿Qué habéis visto hoy en el colegio?
+            </h2>
+            <p className="text-xs text-slate-500">
+              Registra los temas vistos y su comprensión para activar el Active Recall.
+            </p>
+          </div>
+
+          <button
+            onClick={() => openRecapForStudent(currentStudent.id)}
+            className="w-full sm:w-auto px-4 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-sm shadow flex items-center justify-center gap-2 active:scale-95 transition"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>✨ Hacer Recap de Hoy</span>
+          </button>
+        </div>
+
+        {/* SELECTOR DE DÍA PARA VER HORARIO */}
+        <div className="mt-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-600 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+              Horario de {currentStudent.name} ({WEEKDAYS.find((w) => w.key === selectedDayKey)?.name}):
+            </span>
+            <button
+              onClick={() => setScheduleModalOpen(true)}
+              className="text-xs text-indigo-600 hover:underline font-bold flex items-center gap-0.5"
+            >
+              Editar Horario ✏️
+            </button>
+          </div>
+
+          <div className="grid grid-cols-5 gap-1 mb-3 bg-slate-100 p-1 rounded-xl">
+            {WEEKDAYS.map((day) => (
+              <button
+                key={day.key}
+                onClick={() => setSelectedDayKey(day.key)}
+                className={`py-1.5 rounded-lg text-xs font-bold transition ${
+                  selectedDayKey === day.key ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'
+                }`}
+              >
+                {day.short}
+              </button>
+            ))}
+          </div>
+
+          {todaySubjects.length === 0 ? (
+            <div className="text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              <p className="text-xs text-slate-500 mb-2">No hay asignaturas en este día.</p>
+              <button
+                onClick={() => setScheduleModalOpen(true)}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold"
+              >
+                Configurar Horario (Stundenplan)
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {todaySubjects.map((subj, idx) => (
+                <div key={`${subj.id}_${idx}`} className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">{subj.icon}</span>
+                    <span className="font-bold text-xs text-slate-800">{subj.name}</span>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-600">
+                    {idx + 1}ª hora
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* RADAR DE EXÁMENES */}
+      {upcomingExams.length > 0 && (
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+              <AlertCircle className="w-4 h-4 text-amber-500" />
+              Radar de Exámenes ({currentStudent.name})
+            </h3>
+            <button onClick={() => setActiveTab('exams')} className="text-xs font-bold text-indigo-600 hover:underline">
+              Ver calendario
+            </button>
+          </div>
+          {upcomingExams.map((ex) => {
+            const urgency = getExamUrgencyInfo(ex.exam_date);
+            const subj = appData.subjects.find((s) => s.id === ex.subject_id);
+            return (
+              <div key={ex.id} className={`p-3 rounded-xl border flex items-center justify-between gap-2 ${urgency.bannerColor}`}>
+                <div>
+                  <div className="font-bold text-xs uppercase opacity-90">{urgency.badge}</div>
+                  <div className="font-extrabold text-sm">{subj?.icon} {subj?.name}: {ex.title}</div>
+                </div>
+                <button
+                  onClick={() => setActiveTab('recall')}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold shrink-0"
+                >
+                  Repasar
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// VISTA 2: TEMAS, SUBTEMAS Y TIEMPO
+// ============================================================================
+function TopicsAndTasksView({ appData, currentStudent, setAppData, upsertTopicAndSubtopic, setQuickTimeModal, showToast }) {
+  const [subjectFilter, setSubjectFilter] = useState('ALL');
+  const [newTopicModalOpen, setNewTopicModalOpen] = useState(false);
+
+  const studentSubjects = appData.subjects.filter((s) => s.student_id === currentStudent.id);
+  const studentTopics = appData.topics.filter((t) => t.student_id === currentStudent.id)
+    .filter((t) => subjectFilter === 'ALL' || t.subject_id === subjectFilter);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2 bg-white p-3 rounded-2xl border border-slate-200">
+        <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+          <button
+            onClick={() => setSubjectFilter('ALL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 ${subjectFilter === 'ALL' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
+          >
+            Todas
+          </button>
+          {studentSubjects.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setSubjectFilter(s.id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 flex items-center gap-1 ${subjectFilter === s.id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+            >
+              <span>{s.icon}</span>
+              <span>{s.name}</span>
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setNewTopicModalOpen(true)}
+          className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold shrink-0"
+        >
+          + Tema
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        {studentTopics.map((topic) => {
+          const subj = appData.subjects.find((s) => s.id === topic.subject_id);
+          return (
+            <div key={topic.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-indigo-600">{subj?.icon} {subj?.name}</span>
+                  <h3 className="font-extrabold text-sm sm:text-base text-slate-900">{topic.title}</h3>
+                </div>
+                <button
+                  onClick={() => setQuickTimeModal({ student_id: currentStudent.id, subject_id: topic.subject_id, topic_id: topic.id, title: topic.title })}
+                  className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-200"
+                >
+                  ⏱️ +Tiempo
+                </button>
+              </div>
+
+              <div className="divide-y divide-slate-100 pt-1">
+                {topic.subtopics.map((st) => {
+                  const comp = COMPREHENSION_LEVELS.find((c) => c.id === st.comprehension) || COMPREHENSION_LEVELS[1];
+                  return (
+                    <div key={st.id} className="py-2 flex items-center justify-between text-xs gap-2">
+                      <div>
+                        <div className="font-bold text-slate-800">{st.title}</div>
+                        {st.notes && <div className="text-slate-500 italic text-[11px] mt-0.5">💡 {st.notes}</div>}
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full border text-[11px] font-bold shrink-0 ${comp.badgeClass}`}>
+                        {comp.emoji} {comp.short}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {newTopicModalOpen && (
+        <DailyRecapWizardModal
+          appData={appData}
+          studentId={currentStudent.id}
+          onClose={() => setNewTopicModalOpen(false)}
+          upsertTopicAndSubtopic={upsertTopicAndSubtopic}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// VISTA 3: ACTIVE RECALL
+// ============================================================================
+function ActiveRecallParentView({ appData, currentStudent, setParentSelectedStudent, rateSubtopicRecall }) {
+  const todayStr = toDateStr();
+  const allCards = useMemo(() => {
+    return appData.topics
+      .filter((t) => t.student_id === currentStudent.id)
+      .flatMap((t) => {
+        const subj = appData.subjects.find((s) => s.id === t.subject_id);
+        return t.subtopics.map((st) => ({
+          ...st,
+          topic_id: t.id,
+          topic_title: t.title,
+          subject_name: subj?.name || 'Asignatura',
+          subject_icon: subj?.icon || '📘',
+        }));
+      });
+  }, [appData, currentStudent.id]);
+
+  const [activeIdx, setActiveIdx] = useState(0);
+  const card = allCards[activeIdx] || allCards[0];
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-2xl p-4 shadow">
+        <h2 className="text-base font-extrabold">⚡ Active Recall • Preguntando a {currentStudent.name}</h2>
+        <p className="text-xs text-amber-100">Hazle preguntas orales y califica su respuesta para espaciar el repaso.</p>
+      </div>
+
+      {card ? (
+        <div className="bg-white rounded-2xl p-5 shadow border-2 border-amber-400 space-y-4">
+          <div>
+            <span className="text-xs font-bold text-indigo-600">{card.subject_icon} {card.subject_name} • {card.topic_title}</span>
+            <h3 className="text-lg font-black text-slate-900 mt-1">❓ "{card.title}"</h3>
+          </div>
+
+          <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-slate-800">
+            <strong>💡 Chuleta para Papá:</strong> {card.notes || 'Pídele que te explique este subtema con sus palabras y un ejemplo.'}
+          </div>
+
+          <div>
+            <div className="text-xs font-bold uppercase text-slate-500 mb-2 text-center">¿Cómo ha respondido {currentStudent.name}?</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[
+                { r: 1, emoji: '🔄', label: 'No se acordaba', sub: 'Mañana (1d)', cls: 'bg-red-50 text-red-900 border-red-300' },
+                { r: 2, emoji: '😓', label: 'Con ayuda', sub: 'En 2-3 días', cls: 'bg-amber-50 text-amber-900 border-amber-300' },
+                { r: 3, emoji: '👍', label: 'Bien', sub: 'En 4-5 días', cls: 'bg-emerald-50 text-emerald-900 border-emerald-300' },
+                { r: 4, emoji: '🚀', label: 'Perfecto', sub: 'En 7+ días', cls: 'bg-indigo-50 text-indigo-900 border-indigo-300' },
+              ].map((btn) => (
+                <button
+                  key={btn.r}
+                  onClick={() => {
+                    rateSubtopicRecall({ student_id: currentStudent.id, topic_id: card.topic_id, subtopic_id: card.id, rating: btn.r, minutesSpent: 10 });
+                    if (activeIdx < allCards.length - 1) setActiveIdx(activeIdx + 1);
+                    else setActiveIdx(0);
+                  }}
+                  className={`p-3 rounded-xl border text-center transition active:scale-95 ${btn.cls}`}
+                >
+                  <div className="text-xl">{btn.emoji}</div>
+                  <div className="font-bold text-xs mt-0.5">{btn.label}</div>
+                  <div className="text-[10px] opacity-75">{btn.sub}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white p-8 rounded-2xl text-center text-xs text-slate-500">No hay temas creados aún.</div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// VISTA 4: CALENDARIO TIPO TABLA (MENSUAL) + EXÁMENES Y NOTAS ALEMANAS (1+ A 6)
+// ============================================================================
+const MONTH_NAMES_ES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+];
+
+function ExamsAndGermanGradesView({
+  appData,
+  activeProfile,
+  currentStudent,
+  setAppData,
+  getExamUrgencyInfo,
+  showToast,
+  setActiveTab,
+}) {
+  // Vista activa: 'calendar' (Tabla mensual) | 'list' (Lista y expediente)
+  const [viewMode, setViewMode] = useState('calendar');
+
+  // En Modo Padre permite ver ambos hijos ('ALL') o filtrar por uno ('stu_1' | 'stu_2')
+  const [parentFilter, setParentFilter] = useState('ALL');
+
+  // Mes visible en el calendario (año y mes 0-11)
+  const todayDateObj = new Date();
+  const todayStr = toDateStr(todayDateObj);
+  const [calYear, setCalYear] = useState(todayDateObj.getFullYear());
+  const [calMonth, setCalMonth] = useState(todayDateObj.getMonth());
+
+  // Día seleccionado al tocar una casilla de la tabla
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+
+  // Modales de Crear Examen y Calificar Nota Alemana
+  const [createExamModalDate, setCreateExamModalDate] = useState(null); // string YYYY-MM-DD o null
+  const [gradingExamId, setGradingExamId] = useState(null);
+
+  // Filtrado de exámenes y tareas según perfil (Hijo individual o Modo Padre con filtro)
+  const visibleStudentIds = useMemo(() => {
+    if (activeProfile !== 'parent') return [currentStudent.id];
+    if (parentFilter === 'ALL') return appData.students.map((s) => s.id);
+    return [parentFilter];
+  }, [activeProfile, currentStudent.id, parentFilter, appData.students]);
+
+  const filteredExams = useMemo(() => {
+    return appData.exams
+      .filter((e) => visibleStudentIds.includes(e.student_id))
+      .sort((a, b) => a.exam_date.localeCompare(b.exam_date));
+  }, [appData.exams, visibleStudentIds]);
+
+  const filteredTasks = useMemo(() => {
+    return (appData.tasks || []).filter((t) => visibleStudentIds.includes(t.student_id));
+  }, [appData.tasks, visibleStudentIds]);
+
+  // Navegación de meses
+  const goPrevMonth = () => {
+    if (calMonth === 0) {
+      setCalMonth(11);
+      setCalYear((y) => y - 1);
+    } else {
+      setCalMonth((m) => m - 1);
+    }
+  };
+
+  const goNextMonth = () => {
+    if (calMonth === 11) {
+      setCalMonth(0);
+      setCalYear((y) => y + 1);
+    } else {
+      setCalMonth((m) => m + 1);
+    }
+  };
+
+  const goToday = () => {
+    const now = new Date();
+    setCalYear(now.getFullYear());
+    setCalMonth(now.getMonth());
+    setSelectedDate(toDateStr(now));
+  };
+
+  // Construcción de las celdas de la tabla mensual (Lunes = col 0 ... Domingo = col 6)
+  const calendarCells = useMemo(() => {
+    const firstDayOfMonth = new Date(calYear, calMonth, 1);
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    // getDay(): 0 es Domingo, 1 es Lunes... Convertimos a Lunes=0 .. Domingo=6
+    const startOffset = (firstDayOfMonth.getDay() + 6) % 7;
+
+    const cells = [];
+    // Días de relleno del mes anterior
+    const prevMonthDays = new Date(calYear, calMonth, 0).getDate();
+    for (let i = startOffset - 1; i >= 0; i--) {
+      const dNum = prevMonthDays - i;
+      const dt = new Date(calYear, calMonth - 1, dNum);
+      cells.push({
+        dateStr: toDateStr(dt),
+        dayNum: dNum,
+        isCurrentMonth: false,
+      });
+    }
+
+    // Días del mes actual
+    for (let dNum = 1; dNum <= daysInMonth; dNum++) {
+      const dt = new Date(calYear, calMonth, dNum);
+      cells.push({
+        dateStr: toDateStr(dt),
+        dayNum: dNum,
+        isCurrentMonth: true,
+      });
+    }
+
+    // Relleno final hasta completar múltiplo de 7 (35 o 42 celdas)
+    const remaining = (7 - (cells.length % 7)) % 7;
+    for (let i = 1; i <= remaining; i++) {
+      const dt = new Date(calYear, calMonth + 1, i);
+      cells.push({
+        dateStr: toDateStr(dt),
+        dayNum: i,
+        isCurrentMonth: false,
+      });
+    }
+    return cells;
+  }, [calYear, calMonth]);
+
+  // Estilo visual de la píldora de examen según su urgencia o si ya tiene nota
+  const getExamPillStyle = (exam) => {
+    if (exam.grade_label) {
+      return {
+        dot: '🏅',
+        pillClass: 'bg-emerald-50 border-emerald-400 text-emerald-950',
+        dotColor: 'bg-emerald-500',
+      };
+    }
+    const d = diffDaysFromToday(exam.exam_date);
+    if (d < 0) {
+      return {
+        dot: '⏳',
+        pillClass: 'bg-slate-100 border-slate-300 text-slate-700',
+        dotColor: 'bg-slate-400',
+      };
+    }
+    if (d <= 1) {
+      return {
+        dot: '🔴',
+        pillClass: 'bg-red-50 border-red-400 text-red-950 font-extrabold ring-1 ring-red-400/50',
+        dotColor: 'bg-red-600',
+      };
+    }
+    if (d <= 3) {
+      return {
+        dot: '🟠',
+        pillClass: 'bg-orange-50 border-orange-400 text-orange-950 font-bold',
+        dotColor: 'bg-orange-500',
+      };
+    }
+    if (d <= 7) {
+      return {
+        dot: '🟡',
+        pillClass: 'bg-amber-50 border-amber-400 text-amber-950 font-semibold',
+        dotColor: 'bg-amber-500',
+      };
+    }
+    return {
+      dot: '🟢',
+      pillClass: 'bg-emerald-50/70 border-emerald-300 text-emerald-900',
+      dotColor: 'bg-emerald-500',
+    };
+  };
+
+  // Cálculo de Nota Media Alemana (Notendurchschnitt) del alumno actual
+  const studentExamsForAvg = appData.exams.filter((e) => e.student_id === currentStudent.id);
+  const gradedExams = studentExamsForAvg.filter((e) => e.grade_value !== null && e.grade_value !== undefined);
+  const overallAverage =
+    gradedExams.length > 0
+      ? (gradedExams.reduce((acc, e) => acc + Number(e.grade_value), 0) / gradedExams.length)
+          .toFixed(2)
+          .replace('.', ',')
+      : '—';
+
+  // Exámenes y deberes del día seleccionado en la tabla
+  const selectedDayExams = filteredExams.filter((e) => e.exam_date === selectedDate);
+  const selectedDayTasks = filteredTasks.filter((t) => t.due_date === selectedDate);
+
+  const handleDeleteExam = (examId) => {
+    setAppData((prev) => ({
+      ...prev,
+      lastUpdated: Date.now(),
+      exams: prev.exams.filter((e) => e.id !== examId),
+    }));
+    showToast('🗑️ Examen eliminado');
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* CABECERA: NOTENDURCHSCHNITT + CONMUTADOR TABLA VS LISTA */}
+      <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-md space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+              🇩🇪 Exámenes y Notas (1+ bis 6) • {currentStudent.avatar} {currentStudent.name}
+            </span>
+            <h2 className="text-base sm:text-lg font-extrabold mt-0.5 flex items-center gap-2">
+              <span>Media Global (Notendurchschnitt):</span>
+              <span className="px-2.5 py-0.5 rounded-lg bg-amber-500 text-slate-950 font-black">
+                Ø {overallAverage}
+              </span>
+            </h2>
+          </div>
+
+          <button
+            onClick={() => setCreateExamModalDate(selectedDate || todayStr)}
+            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow active:scale-95 transition shrink-0"
+          >
+            <Plus className="w-4 h-4" /> Nuevo Examen
+          </button>
+        </div>
+
+        {/* BARRA DE ALTERNAR VISTA (CALENDARIO TABLA VS LISTA) + FILTRO MODO PADRE */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-slate-800">
+          <div className="grid grid-cols-2 gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800">
+            <button
+              onClick={() => setViewMode('calendar')}
+              className={`py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                viewMode === 'calendar'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>🗓️ Calendario (Tabla)</span>
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition ${
+                viewMode === 'list'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>📋 Lista / Notas ({filteredExams.length})</span>
+            </button>
+          </div>
+
+          {activeProfile === 'parent' && (
+            <div className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800">
+              <button
+                onClick={() => setParentFilter('ALL')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                  parentFilter === 'ALL'
+                    ? 'bg-amber-500 text-slate-950'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
+              >
+                👨‍👦‍👦 Ambos
+              </button>
+              {appData.students.map((stu) => (
+                <button
+                  key={stu.id}
+                  onClick={() => setParentFilter(stu.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                    parentFilter === stu.id
+                      ? 'bg-amber-500 text-slate-950'
+                      : 'text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  {stu.avatar} {stu.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {viewMode === 'calendar' ? (
+        <>
+          {/* =================================================================
+              TABLA DE CALENDARIO MENSUAL (LUNES A DOMINGO)
+             ================================================================= */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            {/* Barra de navegación del mes */}
+            <div className="p-3 sm:p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={goPrevMonth}
+                  className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs active:scale-95 transition"
+                  title="Mes anterior"
+                >
+                  ◀
+                </button>
+                <button
+                  onClick={goNextMonth}
+                  className="p-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs active:scale-95 transition"
+                  title="Mes siguiente"
+                >
+                  ▶
+                </button>
+                <h3 className="font-extrabold text-sm sm:text-base text-slate-900 ml-1">
+                  {MONTH_NAMES_ES[calMonth]} {calYear}
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Leyenda rápida de colores de urgencia */}
+                <div className="hidden md:flex items-center gap-2 text-[11px] text-slate-500 mr-2">
+                  <span>🔴 ≤1d</span>
+                  <span>🟠 ≤3d</span>
+                  <span>🟡 ≤7d</span>
+                  <span>🟢 +7d</span>
+                  <span>📌 Deberes</span>
+                </div>
+                <button
+                  onClick={goToday}
+                  className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs active:scale-95 transition"
+                >
+                  Ir a Hoy
+                </button>
+              </div>
+            </div>
+
+            {/* Cabecera de columnas Lunes a Domingo */}
+            <div className="grid grid-cols-7 bg-slate-100 border-b border-slate-200 text-center">
+              {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((dName, idx) => (
+                <div
+                  key={dName}
+                  className={`py-2 text-[11px] font-extrabold uppercase tracking-wider ${
+                    idx >= 5 ? 'text-slate-400 bg-slate-100/70' : 'text-slate-600'
+                  }`}
+                >
+                  {dName}
+                </div>
+              ))}
+            </div>
+
+            {/* Cuadrícula de días del mes */}
+            <div className="grid grid-cols-7 divide-x divide-y divide-slate-200 border-b border-slate-200">
+              {calendarCells.map((cell, idx) => {
+                const isToday = cell.dateStr === todayStr;
+                const isSelected = cell.dateStr === selectedDate;
+                const isWeekend = idx % 7 === 5 || idx % 7 === 6;
+
+                const dayExams = filteredExams.filter((e) => e.exam_date === cell.dateStr);
+                const dayPendingTasks = filteredTasks.filter(
+                  (t) => t.due_date === cell.dateStr && !t.completed
+                );
+
+                return (
+                  <div
+                    key={cell.dateStr}
+                    onClick={() => setSelectedDate(cell.dateStr)}
+                    className={`min-h-[74px] sm:min-h-[96px] p-1 sm:p-1.5 cursor-pointer transition flex flex-col justify-between relative ${
+                      !cell.isCurrentMonth
+                        ? 'bg-slate-50/60 text-slate-300'
+                        : isWeekend
+                        ? 'bg-slate-50/40'
+                        : 'bg-white'
+                    } ${
+                      isSelected
+                        ? 'ring-2 ring-inset ring-indigo-600 bg-indigo-50/25 z-10'
+                        : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    {/* Fila superior de la casilla: Número de día + Icono de deberes 📌 */}
+                    <div className="flex items-center justify-between gap-0.5">
+                      <span
+                        className={`w-6 h-6 rounded-full text-xs font-extrabold flex items-center justify-center ${
+                          isToday
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : isSelected
+                            ? 'text-indigo-700 font-black'
+                            : cell.isCurrentMonth
+                            ? 'text-slate-700'
+                            : 'text-slate-300'
+                        }`}
+                      >
+                        {cell.dayNum}
+                      </span>
+
+                      {dayPendingTasks.length > 0 && (
+                        <span
+                          className="text-[10px] font-bold px-1 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300"
+                          title={`${dayPendingTasks.length} deber(es) para entregar`}
+                        >
+                          📌{dayPendingTasks.length > 1 ? dayPendingTasks.length : ''}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Píldoras de Exámenes dentro de la casilla */}
+                    <div className="space-y-1 mt-1 overflow-hidden">
+                      {dayExams.map((ex) => {
+                        const subj = appData.subjects.find((s) => s.id === ex.subject_id);
+                        const stu = appData.students.find((s) => s.id === ex.student_id);
+                        const style = getExamPillStyle(ex);
+                        const showStuTag =
+                          activeProfile === 'parent' && parentFilter === 'ALL';
+
+                        return (
+                          <div
+                            key={ex.id}
+                            className={`px-1.5 py-0.5 rounded-md border text-[10px] leading-tight flex items-center justify-between gap-1 truncate shadow-2xs ${style.pillClass}`}
+                            title={`${stu?.name}: ${subj?.name} - ${ex.title}`}
+                          >
+                            <div className="flex items-center gap-0.5 min-w-0 truncate">
+                              <span className="shrink-0">{style.dot}</span>
+                              {showStuTag && (
+                                <span
+                                  className={`px-1 rounded text-[9px] font-black text-white shrink-0 ${
+                                    stu?.id === 'stu_1' ? 'bg-indigo-600' : 'bg-emerald-600'
+                                  }`}
+                                >
+                                  {stu?.name.slice(0, 1)}
+                                </span>
+                              )}
+                              <span className="shrink-0">{subj?.icon}</span>
+                              <span className="truncate font-bold">
+                                {subj?.name}
+                              </span>
+                            </div>
+
+                            {ex.grade_label && (
+                              <span className="px-1 rounded bg-emerald-600 text-white font-black text-[9px] shrink-0">
+                                {ex.grade_label}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Leyenda inferior móvil */}
+            <div className="px-3 py-2 bg-slate-50 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span>🔴 Hoy/Mañana</span>
+                <span>🟠 ≤3 días</span>
+                <span>🟡 ≤7 días</span>
+                <span>🟢 +7 días</span>
+                <span>🏅 Con nota</span>
+              </div>
+              <span className="text-indigo-600 font-bold">
+                👆 Toca cualquier día para ver o añadir examen
+              </span>
+            </div>
+          </div>
+
+          {/* =================================================================
+              PANEL DE DETALLE DEL DÍA SELECCIONADO ABAJO DE LA TABLA
+             ================================================================= */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border-2 border-indigo-200 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+              <div>
+                <span className="text-[11px] font-extrabold uppercase text-indigo-600">
+                  📅 Día seleccionado en el calendario
+                </span>
+                <h4 className="font-black text-base text-slate-900">
+                  {formatHumanDate(selectedDate)}{' '}
+                  <span className="text-xs font-normal text-slate-500">
+                    ({selectedDate.split('-').reverse().join('.')})
+                  </span>
+                </h4>
+              </div>
+
+              <button
+                onClick={() => setCreateExamModalDate(selectedDate)}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition"
+              >
+                <Plus className="w-4 h-4" />
+                <span>+ Añadir Examen este día</span>
+              </button>
+            </div>
+
+            {/* Exámenes de ese día */}
+            {selectedDayExams.length === 0 ? (
+              <div className="text-center py-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                <p className="text-xs text-slate-500">
+                  No hay exámenes programados para el{' '}
+                  <strong>{selectedDate.split('-').reverse().join('.')}</strong>.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {selectedDayExams.map((exam) => {
+                  const subj = appData.subjects.find((s) => s.id === exam.subject_id);
+                  const stu = appData.students.find((s) => s.id === exam.student_id);
+                  const urgency = getExamUrgencyInfo(exam.exam_date);
+                  const gradeObj = GERMAN_GRADES.find((g) => g.label === exam.grade_label);
+                  const feelingObj = POST_EXAM_FEELINGS.find(
+                    (f) => f.id === exam.post_exam_feeling
+                  );
+
+                  const allSubtopics = appData.topics
+                    .filter((t) => t.student_id === exam.student_id)
+                    .flatMap((t) => t.subtopics);
+                  const examSubtopics = allSubtopics.filter((st) =>
+                    (exam.subtopic_ids || []).includes(st.id)
+                  );
+
+                  return (
+                    <div
+                      key={exam.id}
+                      className="rounded-xl border border-slate-200 overflow-hidden bg-slate-50/60"
+                    >
+                      <div
+                        className={`px-3 py-1.5 text-xs font-bold flex items-center justify-between ${urgency.bannerColor}`}
+                      >
+                        <span>
+                          {stu?.avatar} {stu?.name} • {urgency.badge}
+                        </span>
+                        <button
+                          onClick={() => handleDeleteExam(exam.id)}
+                          className="text-xs opacity-75 hover:opacity-100 px-1"
+                          title="Eliminar examen"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+
+                      <div className="p-3 space-y-2.5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <span className="text-xs font-bold text-indigo-600">
+                              {subj?.icon} {subj?.name}
+                            </span>
+                            <h5 className="font-extrabold text-sm sm:text-base text-slate-900">
+                              {exam.title}
+                            </h5>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setActiveTab('recall')}
+                              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold"
+                            >
+                              ⚡ Preguntar en Recall
+                            </button>
+
+                            {exam.grade_label ? (
+                              <button
+                                onClick={() => setGradingExamId(exam.id)}
+                                className={`px-3 py-1.5 rounded-xl font-black text-xs shadow-sm ${
+                                  gradeObj?.color || 'bg-emerald-600 text-white'
+                                }`}
+                              >
+                                Nota: {exam.grade_label} (
+                                {String(exam.grade_value).replace('.', ',')})
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setGradingExamId(exam.id)}
+                                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-sm"
+                              >
+                                🏅 Poner Nota (1+ a 6)
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {examSubtopics.length > 0 && (
+                          <div className="bg-white p-2.5 rounded-xl border border-slate-200/80">
+                            <div className="text-[11px] font-bold text-slate-500 mb-1">
+                              Subtemas que entran en este examen ({examSubtopics.length}):
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {examSubtopics.map((st) => {
+                                const comp = COMPREHENSION_LEVELS.find(
+                                  (c) => c.id === st.comprehension
+                                );
+                                return (
+                                  <span
+                                    key={st.id}
+                                    className={`text-[11px] font-semibold px-2 py-0.5 rounded-lg border ${comp?.badgeClass}`}
+                                  >
+                                    {comp?.emoji} {st.title}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {exam.post_exam_feeling && (
+                          <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-2.5 text-xs">
+                            <span className="font-bold text-indigo-950">
+                              Sensación post-examen: {feelingObj?.emoji} {feelingObj?.label}
+                            </span>
+                            {exam.post_exam_comment && (
+                              <p className="text-slate-700 italic mt-0.5">
+                                "{exam.post_exam_comment}"
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Deberes / Tareas que se entregan en el día seleccionado */}
+            {selectedDayTasks.length > 0 && (
+              <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                <div className="text-xs font-extrabold text-amber-800 flex items-center gap-1">
+                  📌 Deberes con fecha de entrega este día ({selectedDayTasks.length}):
+                </div>
+                {selectedDayTasks.map((tsk) => {
+                  const subj = appData.subjects.find((s) => s.id === tsk.subject_id);
+                  const stu = appData.students.find((s) => s.id === tsk.student_id);
+                  return (
+                    <div
+                      key={tsk.id}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-amber-50/60 border border-amber-200 text-xs"
+                    >
+                      <button
+                        onClick={() =>
+                          setAppData((prev) => ({
+                            ...prev,
+                            lastUpdated: Date.now(),
+                            tasks: prev.tasks.map((item) =>
+                              item.id === tsk.id
+                                ? { ...item, completed: !item.completed, updated_at: Date.now() }
+                                : item
+                            ),
+                          }))
+                        }
+                        className="flex items-center gap-2 text-left"
+                      >
+                        {tsk.completed ? (
+                          <CheckSquare className="w-4 h-4 text-emerald-600 shrink-0" />
+                        ) : (
+                          <Square className="w-4 h-4 text-amber-700 shrink-0" />
+                        )}
+                        <span className={tsk.completed ? 'line-through text-slate-400' : 'font-bold text-slate-800'}>
+                          {stu?.avatar} {subj?.icon} {subj?.name}: {tsk.title}
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        /* ===================================================================
+           VISTA ALTERNATIVA: LISTA Y EXPEDIENTE DE NOTAS POR ASIGNATURA
+           =================================================================== */
+        <div className="space-y-4">
+          {/* Medias por asignatura */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {appData.subjects
+              .filter((s) => s.student_id === currentStudent.id)
+              .map((subj) => {
+                const subjGraded = gradedExams.filter((e) => e.subject_id === subj.id);
+                const avg =
+                  subjGraded.length > 0
+                    ? (
+                        subjGraded.reduce((acc, e) => acc + Number(e.grade_value), 0) /
+                        subjGraded.length
+                      )
+                        .toFixed(1)
+                        .replace('.', ',')
+                    : '—';
+                return (
+                  <div
+                    key={subj.id}
+                    className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="text-xs font-bold text-slate-700">
+                        {subj.icon} {subj.name}
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        {subjGraded.length} nota(s)
+                      </div>
+                    </div>
+                    <div className="text-sm font-black text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg">
+                      Ø {avg}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+
+          <div className="space-y-3">
+            {filteredExams.map((exam) => {
+              const subj = appData.subjects.find((s) => s.id === exam.subject_id);
+              const stu = appData.students.find((s) => s.id === exam.student_id);
+              const urgency = getExamUrgencyInfo(exam.exam_date);
+              const gradeObj = GERMAN_GRADES.find((g) => g.label === exam.grade_label);
+
+              return (
+                <div
+                  key={exam.id}
+                  className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+                >
+                  <div
+                    className={`px-4 py-2 border-b flex items-center justify-between text-xs font-bold ${urgency.bannerColor}`}
+                  >
+                    <span>
+                      {stu?.avatar} {stu?.name} • {urgency.badge}
+                    </span>
+                    <span>Fecha: {formatHumanDate(exam.exam_date)}</span>
+                  </div>
+                  <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <span className="text-xs font-bold text-indigo-600">
+                        {subj?.icon} {subj?.name}
+                      </span>
+                      <h3 className="text-base font-extrabold text-slate-900">{exam.title}</h3>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {exam.grade_label ? (
+                        <button
+                          onClick={() => setGradingExamId(exam.id)}
+                          className={`px-3 py-1.5 rounded-xl font-black text-sm shadow-sm ${
+                            gradeObj?.color || 'bg-emerald-600 text-white'
+                          }`}
+                        >
+                          Nota: {exam.grade_label} ({String(exam.grade_value).replace('.', ',')})
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setGradingExamId(exam.id)}
+                          className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-sm"
+                        >
+                          🏅 Registrar Nota (1+ a 6)
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CREAR NUEVO EXAMEN (CON FECHA PRE-RELLENADA DEL CALENDARIO) */}
+      {createExamModalDate && (
+        <CreateExamModal
+          appData={appData}
+          activeProfile={activeProfile}
+          currentStudent={currentStudent}
+          initialDate={createExamModalDate}
+          onClose={() => setCreateExamModalDate(null)}
+          onSave={(newExam) => {
+            setAppData((prev) => ({
+              ...prev,
+              lastUpdated: Date.now(),
+              exams: [newExam, ...prev.exams],
+            }));
+            setSelectedDate(newExam.exam_date);
+            setCreateExamModalDate(null);
+            showToast('🎓 Examen añadido al calendario');
+          }}
+        />
+      )}
+
+      {/* MODAL CALIFICAR CON NOTA ALEMANA (1+ A 6) Y COMENTARIO POST-EXAMEN */}
+      {gradingExamId && (
+        <GermanGradePickerModal
+          exam={appData.exams.find((e) => e.id === gradingExamId)}
+          onClose={() => setGradingExamId(null)}
+          onSave={({ grade_label, grade_value, post_exam_feeling, post_exam_comment }) => {
+            setAppData((prev) => ({
+              ...prev,
+              lastUpdated: Date.now(),
+              exams: prev.exams.map((e) =>
+                e.id === gradingExamId
+                  ? {
+                      ...e,
+                      grade_label,
+                      grade_value,
+                      post_exam_feeling,
+                      post_exam_comment,
+                      updated_at: Date.now(),
+                    }
+                  : e
+              ),
+            }));
+            setGradingExamId(null);
+            showToast(`🏅 Nota ${grade_label} guardada`);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// MODAL CREAR EXAMEN VINCULANDO TEMAS Y SUBTEMAS
+// ============================================================================
+function CreateExamModal({ appData, activeProfile, currentStudent, initialDate, onClose, onSave }) {
+  const [studentId, setStudentId] = useState(currentStudent.id);
+  const studentSubjects = appData.subjects.filter((s) => s.student_id === studentId);
+  const [subjectId, setSubjectId] = useState(studentSubjects[0]?.id || '');
+  const [title, setTitle] = useState('');
+  const [examDate, setExamDate] = useState(initialDate || toDateStr());
+  const [selectedSubtopics, setSelectedSubtopics] = useState([]);
+
+  useEffect(() => {
+    const subs = appData.subjects.filter((s) => s.student_id === studentId);
+    setSubjectId(subs[0]?.id || '');
+    setSelectedSubtopics([]);
+  }, [studentId]);
+
+  const subjectTopics = appData.topics.filter(
+    (t) => t.student_id === studentId && t.subject_id === subjectId
+  );
+
+  const toggleSubtopic = (subId) => {
+    setSelectedSubtopics((prev) =>
+      prev.includes(subId) ? prev.filter((id) => id !== subId) : [...prev, subId]
+    );
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!title.trim()) {
+      alert('Escribe el título del examen (ej. 2. Klassenarbeit Bruchrechnung)');
+      return;
+    }
+    const topicIds = subjectTopics
+      .filter((t) => t.subtopics.some((st) => selectedSubtopics.includes(st.id)))
+      .map((t) => t.id);
+
+    onSave({
+      id: uid('ex'),
+      student_id: studentId,
+      subject_id: subjectId,
+      title: title.trim(),
+      exam_date: examDate,
+      topic_ids: topicIds,
+      subtopic_ids: selectedSubtopics,
+      post_exam_feeling: null,
+      post_exam_comment: '',
+      grade_label: null,
+      grade_value: null,
+      updated_at: Date.now(),
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3">
+      <div
+        className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+      >
+        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+          <div>
+            <span className="text-[10px] uppercase font-bold text-indigo-300">
+              🗓️ Programar Examen en Calendario
+            </span>
+            <h3 className="font-bold text-sm">Nueva Klassenarbeit / Test</h3>
+          </div>
+          <button type="button" onClick={onClose}>
+            <X className="w-5 h-5 text-slate-400" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3 overflow-y-auto">
+          {/* Selector de hijo */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">Alumno:</label>
+            <div className="grid grid-cols-2 gap-2">
+              {appData.students.map((stu) => (
+                <button
+                  key={stu.id}
+                  type="button"
+                  onClick={() => setStudentId(stu.id)}
+                  className={`py-2 rounded-xl text-xs font-bold border ${
+                    studentId === stu.id
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-slate-50 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  {stu.avatar} {stu.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Asignatura:</label>
+              <select
+                value={subjectId}
+                onChange={(e) => {
+                  setSubjectId(e.target.value);
+                  setSelectedSubtopics([]);
+                }}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold"
+              >
+                {studentSubjects.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.icon} {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Fecha del examen:
+              </label>
+              <input
+                type="date"
+                value={examDate}
+                onChange={(e) => setExamDate(e.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Título del examen:
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Ej. 2. Klassenarbeit: Bruchrechnung"
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              ¿Qué Temas / Subtemas entran en este examen?
+            </label>
+            {subjectTopics.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">
+                Aún no hay subtemas registrados en esta asignatura.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                {subjectTopics.map((topic) => (
+                  <div
+                    key={topic.id}
+                    className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1"
+                  >
+                    <div className="font-bold text-xs text-slate-800">📂 {topic.title}</div>
+                    {topic.subtopics.map((st) => (
+                      <label
+                        key={st.id}
+                        className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer pl-2 py-0.5"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedSubtopics.includes(st.id)}
+                          onChange={() => toggleSubtopic(st.id)}
+                          className="rounded text-indigo-600"
+                        />
+                        <span>{st.title}</span>
+                      </label>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow"
+          >
+            Guardar en Calendario
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// MODAL SELECTOR OFICIAL DE NOTAS ALEMANAS (1+ A 6)
+// ============================================================================
+function GermanGradePickerModal({ exam, onClose, onSave }) {
+  const [selectedLabel, setSelectedLabel] = useState(exam?.grade_label || '2');
+  const [feeling, setFeeling] = useState(exam?.post_exam_feeling || 'good');
+  const [comment, setComment] = useState(exam?.post_exam_comment || '');
+
+  const currentGradeObj =
+    GERMAN_GRADES.find((g) => g.label === selectedLabel) || GERMAN_GRADES[4];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3">
+      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+          <div>
+            <span className="text-[10px] uppercase font-bold text-amber-400">
+              🇩🇪 Calificación Oficial Alemana (Notensystem)
+            </span>
+            <h3 className="font-bold text-sm">{exam?.title}</h3>
+          </div>
+          <button onClick={onClose}>
+            <X className="w-5 h-5 text-slate-400" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4 overflow-y-auto">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-slate-700">Selecciona la nota:</span>
+              <span className="text-xs font-extrabold text-indigo-700">
+                {currentGradeObj.label} ({String(currentGradeObj.value).replace('.', ',')}) —{' '}
+                {currentGradeObj.text}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-1.5">
+              {GERMAN_GRADES.map((g) => (
+                <button
+                  key={g.label}
+                  type="button"
+                  onClick={() => setSelectedLabel(g.label)}
+                  className={`py-2 px-2 rounded-xl text-xs font-black border transition ${
+                    selectedLabel === g.label
+                      ? `${g.color} ring-2 ring-slate-900 scale-105 shadow`
+                      : 'bg-slate-50 text-slate-800 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <div>{g.label}</div>
+                  <div className="text-[10px] font-normal opacity-80">
+                    ({String(g.value).replace('.', ',')})
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              Sensación al salir del examen:
+            </label>
+            <div className="grid grid-cols-4 gap-1.5">
+              {POST_EXAM_FEELINGS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFeeling(f.id)}
+                  className={`py-1.5 rounded-xl border text-xs font-bold ${
+                    feeling === f.id
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-slate-50 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  {f.emoji} {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Comentario post-examen:
+            </label>
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              rows={2}
+              className="w-full rounded-xl border border-slate-300 p-2.5 text-xs"
+              placeholder="¿Qué salió bien o qué pregunta dio problemas?"
+            />
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() =>
+              onSave({
+                grade_label: currentGradeObj.label,
+                grade_value: currentGradeObj.value,
+                post_exam_feeling: feeling,
+                post_exam_comment: comment,
+              })
+            }
+            className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow"
+          >
+            Guardar Nota {currentGradeObj.label}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// VISTA 5: HORAS Y SINCRONIZACIÓN P2P (WEBRTC EN VIVO + QUICK SHARE SAMSUMG)
+// ============================================================================
+function StatsAndP2PSyncView({ appData, setAppData, showToast }) {
+  const [peerStatus, setPeerStatus] = useState('idle'); // 'idle' | 'connecting' | 'ready' | 'connected' | 'error'
+  const [roomCode, setRoomCode] = useState('');
+  const [targetCodeInput, setTargetCodeInput] = useState('');
+  const [syncLogs, setSyncLogs] = useState([]);
+  const fileInputRef = useRef(null);
+  const peerInstanceRef = useRef(null);
+
+  const addLog = (msg) => {
+    setSyncLogs((prev) => [new Date().toLocaleTimeString().slice(0, 5) + ' · ' + msg, ...prev.slice(0, 5)]);
+  };
+
+  const getPeerJS = () => {
+    return new Promise((resolve, reject) => {
+      if (window.Peer) return resolve(window.Peer);
+      reject(new Error('Librería P2P no disponible sin conexión inicial'));
+    });
+  };
+
+  // 1. MÓVIL DE PAPÁ: ABRIR SALA FAMILIAR EN VIVO
+  const startHostRoom = async () => {
+    try {
+      setPeerStatus('connecting');
+      addLog('Iniciando sala P2P para la familia...');
+      const PeerClass = await getPeerJS();
+      const code = 'FAMILIA-' + Math.floor(1000 + Math.random() * 9000);
+      setRoomCode(code);
+
+      if (peerInstanceRef.current) peerInstanceRef.current.destroy();
+      const peer = new PeerClass(code);
+      peerInstanceRef.current = peer;
+
+      peer.on('open', (id) => {
+        setPeerStatus('ready');
+        addLog('📡 Sala abierta: ' + id + '. Esperando a Enrique o Fernando...');
+      });
+
+      peer.on('connection', (conn) => {
+        conn.on('open', () => {
+          setPeerStatus('connected');
+          addLog('🤝 ¡Dispositivo conectado! Recibiendo datos...');
+        });
+
+        conn.on('data', (incoming) => {
+          if (incoming && incoming.type === 'SYNC_DATA') {
+            setAppData((prev) => {
+              const merged = smartMergeState(prev, incoming.payload);
+              // Responder con los datos consolidados
+              conn.send({ type: 'SYNC_CONFIRM', payload: merged });
+              return merged;
+            });
+            addLog('✅ ¡Datos fusionados sin perder nada!');
+            showToast('🔄 Datos fusionados con éxito vía P2P');
+          }
+        });
+      });
+
+      peer.on('error', (err) => {
+        setPeerStatus('error');
+        addLog('Aviso: ' + err.message);
+      });
+    } catch (e) {
+      setPeerStatus('error');
+      addLog('Error: ' + e.message);
+    }
+  };
+
+  // 2. MÓVIL DEL HIJO: CONECTAR A LA SALA DE PAPÁ
+  const connectToHost = async () => {
+    const code = targetCodeInput.trim().toUpperCase();
+    if (!code) {
+      alert('Escribe el código que sale en el móvil de Papá (ej. FAMILIA-4821)');
+      return;
+    }
+    try {
+      setPeerStatus('connecting');
+      addLog('Conectando con el móvil de Papá (' + code + ')...');
+      const PeerClass = await getPeerJS();
+      if (peerInstanceRef.current) peerInstanceRef.current.destroy();
+      const peer = new PeerClass();
+      peerInstanceRef.current = peer;
+
+      peer.on('open', () => {
+        const conn = peer.connect(code);
+        conn.on('open', () => {
+          setPeerStatus('connected');
+          addLog('Enviando mis temas y repasos a Papá...');
+          conn.send({ type: 'SYNC_DATA', payload: appData });
+        });
+
+        conn.on('data', (res) => {
+          if (res && res.type === 'SYNC_CONFIRM') {
+            setAppData((prev) => smartMergeState(prev, res.payload));
+            addLog('✅ ¡Sincronizado con Papá con éxito!');
+            showToast('🔄 Sincronizado con Papá correctamente');
+          }
+        });
+      });
+
+      peer.on('error', (err) => {
+        setPeerStatus('error');
+        addLog('No se pudo conectar: ' + err.message);
+      });
+    } catch (e) {
+      setPeerStatus('error');
+      addLog('Error: ' + e.message);
+    }
+  };
+
+  // 3. SAMSUNG QUICK SHARE / COMPARTIR NATIVO
+  const handleNativeShare = async () => {
+    const jsonStr = JSON.stringify(appData, null, 2);
+    const fileName = 'schulfamilie_datos.json';
+
+    // En móviles Android (Samsung), navigator.share abre Quick Share
+    if (navigator.share && navigator.canShare) {
+      try {
+        const file = new File([jsonStr], fileName, { type: 'application/json' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: 'SchulFamilie Datos',
+            text: 'Paquete de estudio de SchulFamilie para Papá',
+            files: [file],
+          });
+          showToast('📤 Enviado por Quick Share');
+          return;
+        }
+      } catch (err) {
+        // Fallback si el usuario canceló o el navegador no soporta enviar archivos
+      }
+    }
+
+    // Fallback: descarga directa del archivo .json
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('📥 Archivo guardado');
+  };
+
+  // 4. IMPORTAR Y FUSIONAR ARCHIVO EN EL MÓVIL DE PAPÁ
+  const handleFileImport = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const importedData = JSON.parse(ev.target.result);
+        if (!importedData.students) {
+          alert('El archivo no parece ser una copia de SchulFamilie válida.');
+          return;
+        }
+        setAppData((prev) => smartMergeState(prev, importedData));
+        showToast('✅ ¡Datos importados y fusionados con éxito!');
+        addLog('✅ Archivo importado: datos combinados (Smart Merge)');
+      } catch (err) {
+        alert('Error al leer el archivo JSON.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* EXPLICACIÓN INFORMATIVA */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+        <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5 mb-1">
+          <RefreshCw className="w-4 h-4 text-indigo-600" />
+          Sincronización P2P entre Móviles (Sin Servidor)
+        </h3>
+        <p className="text-xs text-slate-600 leading-relaxed">
+          Tus datos no pasan por ninguna empresa ni servidor central. Tienes dos formas de sincronizar los móviles de <strong>Enrique</strong> y <strong>Fernando</strong> con el de <strong>Papá</strong>:
+        </p>
+      </div>
+
+      {/* MÉTODO 1: EN VIVO POR WIFI (WEBRTC) */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-4 shadow-md space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-[10px] uppercase font-bold text-amber-400 flex items-center gap-1">
+              <Wifi className="w-3.5 h-3.5" /> Método 1: En Vivo por WiFi (Automático)
+            </span>
+            <h4 className="font-bold text-sm mt-0.5">Conectar Móviles en Casa</h4>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 font-semibold">
+            WebRTC Directo
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          {/* PANEL PAPÁ */}
+          <div className="p-3 rounded-xl bg-white/10 border border-white/15 space-y-2">
+            <div className="text-xs font-bold text-amber-300">👨‍👦‍👦 1. En el móvil de Papá:</div>
+            <button
+              onClick={startHostRoom}
+              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow active:scale-95 transition"
+            >
+              📡 Abrir Sala Familiar
+            </button>
+            {roomCode && (
+              <div className="p-2 rounded-lg bg-black/50 border border-amber-400/40 text-center">
+                <div className="text-[10px] text-slate-400">Código para Enrique y Fernando:</div>
+                <div className="text-base font-black tracking-widest text-amber-300">{roomCode}</div>
+              </div>
+            )}
+          </div>
+
+          {/* PANEL HIJO */}
+          <div className="p-3 rounded-xl bg-white/10 border border-white/15 space-y-2">
+            <div className="text-xs font-bold text-indigo-300">👦 2. En el móvil del hijo:</div>
+            <input
+              type="text"
+              value={targetCodeInput}
+              onChange={(e) => setTargetCodeInput(e.target.value)}
+              placeholder="Ej. FAMILIA-4821"
+              className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white font-bold uppercase placeholder-slate-500"
+            />
+            <button
+              onClick={connectToHost}
+              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs shadow active:scale-95 transition"
+            >
+              🔄 Sincronizar con Papá
+            </button>
+          </div>
+        </div>
+
+        {/* LOG DE ESTADO DE LA CONEXIÓN */}
+        {syncLogs.length > 0 && (
+          <div className="p-2.5 rounded-xl bg-black/40 border border-white/10 space-y-1">
+            <div className="text-[10px] font-bold text-slate-400 uppercase">Estado en vivo:</div>
+            {syncLogs.map((logItem, i) => (
+              <div key={i} className="text-xs text-emerald-300 font-mono">{logItem}</div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* MÉTODO 2: OFFLINE O POR QUICK SHARE (SAMSUNG / BLUETOOTH) */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-[10px] uppercase font-bold text-indigo-600 flex items-center gap-1">
+              <Smartphone className="w-3.5 h-3.5" /> Método 2: Quick Share de Samsung / Sin Internet
+            </span>
+            <h4 className="font-bold text-sm text-slate-900 mt-0.5">Pasar datos por cercanía física</h4>
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-600">
+          Ideal si los teléfonos no tienen WiFi o están fuera de casa. Enrique o Fernando tocan <strong>"Compartir Datos"</strong> y su móvil Samsung abre <strong>Quick Share</strong> para enviárselo al móvil de Papá. Luego Papá toca <strong>"Importar"</strong> y la app une las materias y horas automáticamente.
+        </p>
+
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <button
+            onClick={handleNativeShare}
+            className="py-3 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition"
+          >
+            <Share2 className="w-4 h-4 text-indigo-600" />
+            <span>📤 Compartir Datos</span>
+          </button>
+
+          <button
+            onClick={() => fileInputRef.current && fileInputRef.current.click()}
+            className="py-3 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition"
+          >
+            <Upload className="w-4 h-4" />
+            <span>📥 Importar y Unir</span>
+          </button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleFileImport}
+            className="hidden"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ============================================================================
+// MODAL RECAP
+// ============================================================================
+function DailyRecapWizardModal({ appData, studentId, onClose, upsertTopicAndSubtopic }) {
+  const student = appData.students.find((s) => s.id === studentId) || appData.students[0];
+  const studentSubjects = appData.subjects.filter((s) => s.student_id === student.id);
+  const [selectedSubjId, setSelectedSubjId] = useState(studentSubjects[0]?.id || '');
+  const [topicTitle, setTopicTitle] = useState('');
+  const [subtopicTitle, setSubtopicTitle] = useState('');
+  const [comp, setComp] = useState(2);
+  const [mins, setMins] = useState(30);
+  const [notes, setNotes] = useState('');
+
+  const handleSave = () => {
+    if (!subtopicTitle.trim()) {
+      alert('Escribe qué subtema habéis visto hoy');
+      return;
+    }
+    upsertTopicAndSubtopic({
+      student_id: student.id,
+      subject_id: selectedSubjId,
+      topicIdOrNew: 'NEW',
+      newTopicTitle: topicTitle.trim() || 'Tema General',
+      subtopicTitle,
+      comprehension: comp,
+      minutes: mins,
+      notes,
+    });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3">
+      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-4 space-y-3">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+          <h3 className="font-bold text-sm">✨ Recap Diario • {student.name}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1">Asignatura:</label>
+          <select value={selectedSubjId} onChange={(e) => setSelectedSubjId(e.target.value)} className="w-full rounded-xl border border-slate-300 p-2 text-xs font-bold">
+            {studentSubjects.map((s) => <option key={s.id} value={s.id}>{s.icon} {s.name}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1">Tema Principal (Unidad):</label>
+          <input type="text" value={topicTitle} onChange={(e) => setTopicTitle(e.target.value)} placeholder="Ej. Fracciones o Fotosíntesis" className="w-full rounded-xl border border-slate-300 p-2 text-xs" />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1">Subtema concreto visto hoy:</label>
+          <input type="text" value={subtopicTitle} onChange={(e) => setSubtopicTitle(e.target.value)} placeholder="Ej. Suma de fracciones con distinto denominador" className="w-full rounded-xl border border-slate-300 p-2 text-xs" />
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1">Nivel de comprensión:</label>
+          <div className="grid grid-cols-2 gap-1.5">
+            {COMPREHENSION_LEVELS.map((lvl) => (
+              <button key={lvl.id} type="button" onClick={() => setComp(lvl.id)} className={`p-2 rounded-xl border text-xs font-bold text-left ${comp === lvl.id ? 'ring-2 ring-indigo-600 bg-indigo-50 border-indigo-500' : 'bg-slate-50'}`}>
+                {lvl.emoji} {lvl.short}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1">Pista o nota del profesor:</label>
+          <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Fórmula o clave dicha en clase" className="w-full rounded-xl border border-slate-300 p-2 text-xs" />
+        </div>
+
+        <button onClick={handleSave} className="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow">Guardar Recap</button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// MODAL +TIEMPO
+// ============================================================================
+function QuickAddTimeModal({ target, onClose, onSave }) {
+  const [mins, setMins] = useState(30);
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-sm rounded-2xl p-4 shadow-xl space-y-3">
+        <h3 className="font-bold text-sm">⏱️ +Tiempo en {target.title}</h3>
+        <div className="grid grid-cols-4 gap-1.5">
+          {[15, 30, 45, 60].map((m) => (
+            <button key={m} onClick={() => setMins(m)} className={`py-2 rounded-xl text-xs font-bold border ${mins === m ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>+{m}m</button>
+          ))}
+        </div>
+        <button onClick={() => onSave({ student_id: target.student_id, subject_id: target.subject_id, topic_id: target.topic_id, minutes: mins })} className="w-full py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow">
+          Guardar +{mins}m
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Montar aplicación en DOM
+const rootEl = document.getElementById("root");
+if (rootEl) {
+  const root = ReactDOM.createRoot(rootEl);
+  root.render(React.createElement(App));
+}
+  </script>
+</body>
+</html>
