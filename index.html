@@ -153,6 +153,75 @@ const POST_EXAM_FEELINGS = [
   { id: 'hard', emoji: '😰', label: 'Difícil' },
 ];
 
+// Escala de Participación en Clase (Mündliche Mitarbeit: 1 = Muy alta ... 5 = Baja, + No aplica)
+const PARTICIPATION_LEVELS = [
+  { id: '1', grade: 1.0, pct: 100, emoji: '🌟', label: 'Muy alta', de: 'Sehr gut (1)', badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-400', activeClass: 'bg-emerald-600 text-white border-emerald-600 ring-2 ring-emerald-300' },
+  { id: '2', grade: 2.0, pct: 80,  emoji: '🙋‍♂️', label: 'Alta',     de: 'Gut (2)',      badgeClass: 'bg-green-100 text-green-900 border-green-400',   activeClass: 'bg-green-600 text-white border-green-600 ring-2 ring-green-300' },
+  { id: '3', grade: 3.0, pct: 60,  emoji: '🙂', label: 'Normal',   de: 'Befriedigend (3)', badgeClass: 'bg-amber-100 text-amber-900 border-amber-400', activeClass: 'bg-amber-500 text-slate-950 border-amber-500 ring-2 ring-amber-300' },
+  { id: '5', grade: 5.0, pct: 20,  emoji: '😶', label: 'Baja',     de: 'Mangelhaft (5)',   badgeClass: 'bg-rose-100 text-rose-900 border-rose-300',     activeClass: 'bg-rose-600 text-white border-rose-600 ring-2 ring-rose-300' },
+  { id: 'na', grade: null, pct: null, emoji: '⚪', label: 'No aplica', de: 'Sin nota oral', badgeClass: 'bg-slate-100 text-slate-600 border-slate-300', activeClass: 'bg-slate-700 text-white border-slate-700' },
+];
+
+const SESSION_TYPES = [
+  { id: 'normal',     emoji: '📖', label: 'Clase Normal', short: 'Clase',      badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-300' },
+  { id: 'vertretung', emoji: '🔄', label: 'Vertretung (Sustitución)', short: 'Vertretung', badgeClass: 'bg-amber-100 text-amber-900 border-amber-400' },
+  { id: 'entfall',    emoji: '🚫', label: 'Entfall (Cancelada)',      short: 'Entfall',    badgeClass: 'bg-slate-200 text-slate-700 border-slate-400' },
+];
+
+// Helper para calcular estadísticas de participación y Vertretung
+const computeParticipationStats = (sessions = [], studentId, subjectId = null) => {
+  const filtered = (sessions || []).filter(
+    (s) => s.student_id === studentId && (subjectId ? s.subject_id === subjectId : true)
+  );
+  const normalCount = filtered.filter((s) => s.status === 'normal').length;
+  const vertretungCount = filtered.filter((s) => s.status === 'vertretung').length;
+  const entfallCount = filtered.filter((s) => s.status === 'entfall').length;
+
+  const graded = filtered
+    .map((s) => PARTICIPATION_LEVELS.find((p) => p.id === String(s.participation)))
+    .filter((p) => p && p.grade !== null);
+
+  let avgGrade = null;
+  let avgPct = null;
+  let avgLabel = 'Sin datos';
+  let avgEmoji = '⚪';
+
+  if (graded.length > 0) {
+    const sumGrade = graded.reduce((a, b) => a + b.grade, 0);
+    const sumPct = graded.reduce((a, b) => a + b.pct, 0);
+    avgGrade = sumGrade / graded.length;
+    avgPct = Math.round(sumPct / graded.length);
+    if (avgGrade <= 1.5) { avgLabel = 'Muy alta'; avgEmoji = '🌟'; }
+    else if (avgGrade <= 2.5) { avgLabel = 'Alta'; avgEmoji = '🙋‍♂️'; }
+    else if (avgGrade <= 3.6) { avgLabel = 'Normal'; avgEmoji = '🙂'; }
+    else { avgLabel = 'Baja'; avgEmoji = '😶'; }
+  }
+
+  // Calcular racha de clases con participación Alta o Muy alta (1 o 2)
+  const sortedByDate = [...filtered]
+    .filter((s) => s.participation && s.participation !== 'na')
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.updated_at || 0) - (a.updated_at || 0));
+  let highStreak = 0;
+  for (const s of sortedByDate) {
+    if (s.participation === '1' || s.participation === '2') highStreak++;
+    else break;
+  }
+
+  return {
+    totalSessions: filtered.length,
+    normalCount,
+    vertretungCount,
+    entfallCount,
+    gradedCount: graded.length,
+    avgGrade,
+    avgGradeStr: avgGrade !== null ? avgGrade.toFixed(1).replace('.', ',') : '—',
+    avgPct,
+    avgLabel,
+    avgEmoji,
+    highStreak,
+  };
+};
+
 const WEEKDAYS = [
   { key: 1, name: 'Lunes', short: 'Lun', de: 'Montag' },
   { key: 2, name: 'Martes', short: 'Mar', de: 'Dienstag' },
@@ -309,6 +378,13 @@ const createInitialData = () => {
       { id: 'log_2', student_id: 'stu_1', subject_id: 'sub_e_mathe', topic_id: 'top_e_1', subtopic_id: 'subtop_e_1_2', date: yesterday, minutes: 40, note: 'Ficha de repaso', updated_at: Date.now() - 40000000 },
       { id: 'log_3', student_id: 'stu_2', subject_id: 'sub_f_mathe', topic_id: 'top_f_1', subtopic_id: 'subtop_f_1_1', date: yesterday, minutes: 25, note: 'Cálculo de áreas', updated_at: Date.now() - 35000000 },
     ],
+    class_sessions: [
+      { id: 'sess_1', student_id: 'stu_1', subject_id: 'sub_e_mathe', date: twoDaysAgo, period_idx: 0, status: 'normal', participation: '1', topic_title: 'Bruchrechnung', subtopic_title: 'Hauptnenner', note: 'Salí a la pizarra a resolver 2 fracciones', updated_at: Date.now() - 90000000 },
+      { id: 'sess_2', student_id: 'stu_1', subject_id: 'sub_e_deu',   date: yesterday,  period_idx: 1, status: 'vertretung', participation: 'na', topic_title: '', subtopic_title: '', note: 'Profesor de guardia, lectura libre', updated_at: Date.now() - 50000000 },
+      { id: 'sess_3', student_id: 'stu_1', subject_id: 'sub_e_bio',   date: yesterday,  period_idx: 2, status: 'normal', participation: '2', topic_title: 'Fotosynthese', subtopic_title: 'Cloroplastos', note: 'Respondí dos preguntas', updated_at: Date.now() - 45000000 },
+      { id: 'sess_4', student_id: 'stu_2', subject_id: 'sub_f_mathe', date: yesterday,  period_idx: 0, status: 'normal', participation: '2', topic_title: 'Geometrie', subtopic_title: 'Umfang vs Flächeninhalt', note: 'Participación activa en clase', updated_at: Date.now() - 35000000 },
+      { id: 'sess_5', student_id: 'stu_2', subject_id: 'sub_f_eng',   date: twoDaysAgo, period_idx: 1, status: 'entfall', participation: 'na', topic_title: '', subtopic_title: '', note: 'Última hora cancelada', updated_at: Date.now() - 80000000 },
+    ],
     tasks: [
       { id: 'tsk_1', student_id: 'stu_1', subject_id: 'sub_e_mathe', title: 'Arbeitsblatt Bruchrechnung (Ej. 3 y 4)', due_date: today, priority: 'high', completed: false, updated_at: Date.now() - 20000000 },
       { id: 'tsk_2', student_id: 'stu_2', subject_id: 'sub_f_mathe', title: 'Libro pág. 45 nº 1 a 4', due_date: addDaysStr(today, 1), priority: 'medium', completed: false, updated_at: Date.now() - 15000000 },
@@ -390,6 +466,7 @@ const smartMergeState = (localState, remoteState) => {
     },
     topics: smartMergeTopics(localState.topics, remoteState.topics),
     work_logs: mergeArraysById(localState.work_logs, remoteState.work_logs),
+    class_sessions: mergeArraysById(localState.class_sessions || [], remoteState.class_sessions || []),
     tasks: mergeArraysById(localState.tasks, remoteState.tasks),
     exams: mergeArraysById(localState.exams, remoteState.exams),
   };
@@ -402,7 +479,15 @@ function App() {
   const [appData, setAppData] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const init = createInitialData();
+        return {
+          ...init,
+          ...parsed,
+          class_sessions: parsed.class_sessions || init.class_sessions || [],
+        };
+      }
     } catch (e) {
       console.error(e);
     }
@@ -464,6 +549,41 @@ function App() {
     showToast(`⏱️ +${minutes}m registrados (${formatHumanDate(date || toDateStr())})`);
   };
 
+  const recordClassSessionOnly = ({
+    student_id,
+    subject_id,
+    date,
+    period_idx = 0,
+    status = 'vertretung',
+    participation = 'na',
+    note = '',
+  }) => {
+    const now = Date.now();
+    const sessDate = date || toDateStr();
+    const newSess = {
+      id: `sess_${student_id}_${subject_id}_${sessDate}_${period_idx}`,
+      student_id,
+      subject_id,
+      date: sessDate,
+      period_idx,
+      status,
+      participation,
+      topic_title: '',
+      subtopic_title: '',
+      note: note || (status === 'vertretung' ? 'Vertretung (Sustitución sin temario)' : 'Entfall (Clase cancelada)'),
+      updated_at: now,
+    };
+    setAppData((prev) => ({
+      ...prev,
+      lastUpdated: now,
+      class_sessions: [
+        newSess,
+        ...(prev.class_sessions || []).filter((s) => s.id !== newSess.id),
+      ],
+    }));
+    showToast(status === 'vertretung' ? '🔄 Hora marcada como Vertretung (tachada)' : '🚫 Hora marcada como Entfall (cancelada)');
+  };
+
   const upsertTopicAndSubtopic = ({
     student_id,
     subject_id,
@@ -471,6 +591,8 @@ function App() {
     newTopicTitle,
     subtopicTitle,
     comprehension,
+    participation = '2',
+    period_idx = 0,
     minutes,
     notes,
     date,
@@ -531,15 +653,37 @@ function App() {
         });
       }
 
+      const sessDate = date || toDateStr();
+      const resolvedTopicObj = updatedTopics.find((t) => t.id === targetTopicId);
+      const newSess = {
+        id: `sess_${student_id}_${subject_id}_${sessDate}_${period_idx}`,
+        student_id,
+        subject_id,
+        date: sessDate,
+        period_idx,
+        status: 'normal',
+        participation: participation || '2',
+        topic_id: targetTopicId,
+        subtopic_id: newSubId,
+        topic_title: resolvedTopicObj ? resolvedTopicObj.title : (newTopicTitle || ''),
+        subtopic_title: subtopicTitle.trim(),
+        note: notes || '',
+        updated_at: now,
+      };
+
       return {
         ...prev,
         lastUpdated: now,
         topics: updatedTopics,
         work_logs: updatedLogs,
+        class_sessions: [
+          newSess,
+          ...(prev.class_sessions || []).filter((s) => s.id !== newSess.id),
+        ],
       };
     });
 
-    showToast(`✅ Subtema guardado en Active Recall (${compObj.days}d)`);
+    showToast(`✅ Recap y participación guardados (Recall en ${compObj.days}d)`);
   };
 
   const rateSubtopicRecall = ({ student_id, topic_id, subtopic_id, rating, minutesSpent }) => {
@@ -856,6 +1000,7 @@ function App() {
           studentId={recapStudentId}
           onClose={() => setRecapWizardOpen(false)}
           upsertTopicAndSubtopic={upsertTopicAndSubtopic}
+          recordClassSessionOnly={recordClassSessionOnly}
         />
       )}
 
@@ -1278,7 +1423,7 @@ function EditProfilesAndSubjectsModal({ appData, setAppData, onClose, showToast 
 }
 
 // ============================================================================
-// VISTA 1: HOY / RECAP DIARIO Y SUPERVISOR PADRE
+// VISTA 1: HOY / RECAP DIARIO Y SUPERVISOR PADRE (CON VERTRETUNG Y PARTICIPACIÓN)
 // ============================================================================
 function TodayAndParentDashboard({
   appData,
@@ -1313,12 +1458,20 @@ function TodayAndParentDashboard({
     const dueRecall = allSubs.filter((st) => st.next_recall_date <= todayStr).length;
     const weakCount = allSubs.filter((st) => st.comprehension <= 2).length;
     const nextExam = appData.exams.filter((e) => e.student_id === stuId && diffDaysFromToday(e.exam_date) >= 0).sort((a, b) => a.exam_date.localeCompare(b.exam_date))[0];
-    return { todayMins, yesterdayMins, dueRecall, weakCount, nextExam };
+    const partStats = computeParticipationStats(appData.class_sessions || [], stuId);
+    const todaySessions = (appData.class_sessions || []).filter((s) => s.student_id === stuId && s.date === todayStr);
+    const todayVertretungen = todaySessions.filter((s) => s.status === 'vertretung' || s.status === 'entfall').length;
+    return { todayMins, yesterdayMins, dueRecall, weakCount, nextExam, partStats, todayVertretungen };
   };
+
+  // Sesiones registradas hoy para el alumno actual
+  const studentTodaySessions = (appData.class_sessions || []).filter(
+    (s) => s.student_id === currentStudent.id && s.date === todayStr
+  );
 
   return (
     <div className="space-y-4">
-      {/* MODO PADRE: COMPARATIVA ENRIQUE VS FERNANDO */}
+      {/* MODO PADRE: COMPARATIVA ENRIQUE VS FERNANDO (CON PARTICIPACIÓN ORAL) */}
       {activeProfile === 'parent' && (
         <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-4 shadow-md border border-slate-700">
           <div className="flex items-center justify-between mb-3">
@@ -1369,29 +1522,42 @@ function TodayAndParentDashboard({
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-1.5 text-center my-2">
+                  <div className="grid grid-cols-4 gap-1 text-center my-2">
                     <div className="bg-slate-900/60 rounded-lg p-1.5">
                       <div className="text-xs font-bold text-emerald-400">{formatMinutes(st.todayMins)}</div>
-                      <div className="text-[10px] text-slate-400">Hoy (Ayer {formatMinutes(st.yesterdayMins)})</div>
+                      <div className="text-[9px] text-slate-400">Hoy</div>
                     </div>
                     <div className="bg-slate-900/60 rounded-lg p-1.5">
                       <div className="text-xs font-bold text-amber-400">{st.dueRecall}</div>
-                      <div className="text-[10px] text-slate-400">Por preguntar</div>
+                      <div className="text-[9px] text-slate-400">Recall</div>
                     </div>
                     <div className="bg-slate-900/60 rounded-lg p-1.5">
                       <div className="text-xs font-bold text-rose-400">{st.weakCount}</div>
-                      <div className="text-[10px] text-slate-400">Flojos 🔴/🟠</div>
+                      <div className="text-[9px] text-slate-400">Flojos 🔴</div>
+                    </div>
+                    <div className="bg-slate-900/60 rounded-lg p-1.5" title="Media de Participación en clase (1=Muy alta, 5=Baja)">
+                      <div className="text-xs font-bold text-sky-300">
+                        {st.partStats.avgEmoji} Ø {st.partStats.avgGradeStr}
+                      </div>
+                      <div className="text-[9px] text-slate-400">Particip.</div>
                     </div>
                   </div>
 
-                  {st.nextExam ? (
-                    <div className="text-[11px] bg-amber-500/20 border border-amber-400/30 text-amber-200 px-2.5 py-1 rounded-lg flex items-center justify-between">
-                      <span className="truncate">🎓 {st.nextExam.title}</span>
-                      <span className="font-bold ml-1 shrink-0">en {diffDaysFromToday(st.nextExam.exam_date)}d</span>
-                    </div>
-                  ) : (
-                    <div className="text-[11px] text-slate-400 italic">Sin exámenes próximos</div>
-                  )}
+                  <div className="flex items-center justify-between gap-1 text-[11px]">
+                    {st.nextExam ? (
+                      <div className="flex-1 bg-amber-500/20 border border-amber-400/30 text-amber-200 px-2 py-1 rounded-lg flex items-center justify-between truncate">
+                        <span className="truncate">🎓 {st.nextExam.title}</span>
+                        <span className="font-bold ml-1 shrink-0">en {diffDaysFromToday(st.nextExam.exam_date)}d</span>
+                      </div>
+                    ) : (
+                      <div className="text-slate-400 italic">Sin exámenes próximos</div>
+                    )}
+                    {st.partStats.highStreak > 0 && (
+                      <span className="px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-bold shrink-0">
+                        🔥 {st.partStats.highStreak} clases alta
+                      </span>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -1399,7 +1565,7 @@ function TodayAndParentDashboard({
         </div>
       )}
 
-      {/* RUTINA DE TARDE: RECAP GUIADO */}
+      {/* RUTINA DE TARDE: RECAP GUIADO SEGÚN EL HORARIO (CON TACHADO DE VERTRETUNG) */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-indigo-100">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           <div>
@@ -1410,7 +1576,7 @@ function TodayAndParentDashboard({
               ¿Qué habéis visto hoy en el colegio?
             </h2>
             <p className="text-xs text-slate-500">
-              Registra los temas vistos y su comprensión para activar el Active Recall.
+              Registra temario, tu <strong>participación en clase (1 a 5)</strong> o tacha si hubo <strong>Vertretung / Entfall</strong>.
             </p>
           </div>
 
@@ -1423,12 +1589,12 @@ function TodayAndParentDashboard({
           </button>
         </div>
 
-        {/* SELECTOR DE DÍA PARA VER HORARIO */}
+        {/* SELECTOR DE DÍA Y CLASES DEL HORARIO (CON TACHADO SI FUE VERTRETUNG / ENTFALL) */}
         <div className="mt-3">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-600 flex items-center gap-1">
               <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-              Horario de {currentStudent.name} ({WEEKDAYS.find((w) => w.key === selectedDayKey)?.name}):
+              Clases de {currentStudent.name} ({WEEKDAYS.find((w) => w.key === selectedDayKey)?.name}):
             </span>
             <button
               onClick={() => setScheduleModalOpen(true)}
@@ -1464,17 +1630,82 @@ function TodayAndParentDashboard({
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              {todaySubjects.map((subj, idx) => (
-                <div key={`${subj.id}_${idx}`} className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">{subj.icon}</span>
-                    <span className="font-bold text-xs text-slate-800">{subj.name}</span>
+              {todaySubjects.map((subj, idx) => {
+                // Buscar si ya se registró sesión hoy para esta hora o asignatura
+                const session =
+                  studentTodaySessions.find((s) => s.period_idx === idx && s.subject_id === subj.id) ||
+                  studentTodaySessions.find((s) => s.subject_id === subj.id);
+
+                const isVertretung = session?.status === 'vertretung';
+                const isEntfall = session?.status === 'entfall';
+                const isStruckOut = isVertretung || isEntfall;
+                const partObj = session
+                  ? PARTICIPATION_LEVELS.find((p) => p.id === String(session.participation))
+                  : null;
+
+                return (
+                  <div
+                    key={`${subj.id}_${idx}`}
+                    onClick={() => openRecapForStudent(currentStudent.id)}
+                    className={`p-3 rounded-xl border cursor-pointer transition flex flex-col justify-between gap-2 ${
+                      isStruckOut
+                        ? 'bg-slate-100/90 border-dashed border-slate-300 opacity-80'
+                        : session
+                        ? 'bg-emerald-50/60 border-emerald-300'
+                        : 'bg-slate-50/70 border-slate-200 hover:border-indigo-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-base shrink-0">{subj.icon}</span>
+                        <span
+                          className={`font-bold text-xs truncate ${
+                            isStruckOut ? 'line-through text-slate-500' : 'text-slate-800'
+                          }`}
+                        >
+                          {subj.name}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-600 shrink-0">
+                        {idx + 1}ª hora
+                      </span>
+                    </div>
+
+                    {session ? (
+                      <div className="space-y-1">
+                        {isVertretung && (
+                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-extrabold">
+                            🔄 Vertretung (Tachada · Sin temario)
+                          </div>
+                        )}
+                        {isEntfall && (
+                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-200 text-slate-700 border border-slate-300 text-[10px] font-extrabold">
+                            🚫 Entfall (Clase cancelada)
+                          </div>
+                        )}
+                        {session.status === 'normal' && (
+                          <div className="text-[11px] text-emerald-900 font-semibold truncate">
+                            ✅ {session.subtopic_title || session.topic_title || 'Recap completado'}
+                          </div>
+                        )}
+                        {partObj && partObj.id !== 'na' && (
+                          <div className="flex items-center justify-between text-[10px] pt-1 border-t border-slate-200/60">
+                            <span className="text-slate-500">Participación:</span>
+                            <span className={`px-1.5 py-0.2 rounded font-bold border ${partObj.badgeClass}`}>
+                              {partObj.emoji} {partObj.label} (Nota {partObj.grade})
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-indigo-600 font-semibold flex items-center justify-between pt-1 border-t border-slate-200/60">
+                        <span>Pendiente de Recap</span>
+                        <span>Registrar →</span>
+                      </div>
+                    )}
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-600">
-                    {idx + 1}ª hora
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -2958,7 +3189,127 @@ function StatsAndP2PSyncView({ appData, setAppData, showToast }) {
 
   return (
     <div className="space-y-4">
-      {/* EXPLICACIÓN INFORMATIVA */}
+      {/* =====================================================================
+          ESTADÍSTICAS DE PARTICIPACIÓN EN CLASE (MÜNDLICHE MITARBEIT) Y VERTRETUNG
+         ===================================================================== */}
+      {(() => {
+        const studentSubjects = appData.subjects.filter((s) => s.student_id === currentStudent.id);
+        const globalStats = computeParticipationStats(appData.class_sessions || [], currentStudent.id);
+        const totalLost = globalStats.vertretungCount + globalStats.entfallCount;
+        const lostPct =
+          globalStats.totalSessions > 0
+            ? Math.round((totalLost / globalStats.totalSessions) * 100)
+            : 0;
+
+        return (
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+              <div>
+                <span className="text-[11px] font-extrabold uppercase text-indigo-600">
+                  🙋‍♂️ Mündliche Mitarbeit &amp; Clases • {currentStudent.avatar} {currentStudent.name}
+                </span>
+                <h3 className="font-black text-base text-slate-900 mt-0.5">
+                  Estadísticas de Participación en Clase y Vertretung
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-950 text-xs font-black">
+                  Media Oral: {globalStats.avgEmoji} Ø {globalStats.avgGradeStr}{' '}
+                  {globalStats.avgPct !== null ? `(${globalStats.avgPct}% · ${globalStats.avgLabel})` : ''}
+                </div>
+                {globalStats.highStreak > 0 && (
+                  <div className="px-2.5 py-1.5 rounded-xl bg-emerald-100 text-emerald-900 text-xs font-extrabold">
+                    🔥 Racha: {globalStats.highStreak}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Tarjetas resumen global de sesiones */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
+                <div className="text-base font-black text-emerald-800">{globalStats.normalCount}</div>
+                <div className="text-[11px] font-bold text-emerald-700">📖 Clases Normales</div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200">
+                <div className="text-base font-black text-amber-800">{globalStats.vertretungCount}</div>
+                <div className="text-[11px] font-bold text-amber-700">🔄 Vertretungen</div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-100 border border-slate-300">
+                <div className="text-base font-black text-slate-800">{globalStats.entfallCount}</div>
+                <div className="text-[11px] font-bold text-slate-600">🚫 Entfall (Canceladas)</div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-200">
+                <div className="text-base font-black text-indigo-800">{lostPct}%</div>
+                <div className="text-[11px] font-bold text-indigo-700">Sin temario nuevo</div>
+              </div>
+            </div>
+
+            {/* Desglose por Asignatura */}
+            <div className="space-y-2.5">
+              <div className="text-xs font-extrabold uppercase text-slate-500">
+                Media de Participación (1 = Muy alta, 5 = Baja) y Vertretungen por Asignatura:
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {studentSubjects.map((subj) => {
+                  const st = computeParticipationStats(
+                    appData.class_sessions || [],
+                    currentStudent.id,
+                    subj.id
+                  );
+                  return (
+                    <div
+                      key={subj.id}
+                      className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-extrabold text-xs sm:text-sm text-slate-900 flex items-center gap-1.5">
+                          <span>{subj.icon}</span>
+                          <span>{subj.name}</span>
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-lg bg-white border border-slate-200 text-xs font-black text-indigo-700 shadow-2xs">
+                          {st.avgEmoji} Ø {st.avgGradeStr}{' '}
+                          <span className="font-semibold text-slate-500">
+                            ({st.avgLabel})
+                          </span>
+                        </span>
+                      </div>
+
+                      {/* Barra visual de porcentaje de participación */}
+                      <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all ${
+                            (st.avgPct || 0) >= 80
+                              ? 'bg-emerald-500'
+                              : (st.avgPct || 0) >= 55
+                              ? 'bg-amber-500'
+                              : 'bg-rose-500'
+                          }`}
+                          style={{ width: `${st.avgPct !== null ? st.avgPct : 0}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-600 pt-0.5">
+                        <div className="flex items-center gap-2">
+                          <span title="Clases con materia normal">📖 <strong>{st.normalCount}</strong> norm.</span>
+                          <span title="Sustituciones sin temario" className="text-amber-800">🔄 <strong>{st.vertretungCount}</strong> Vertr.</span>
+                          <span title="Clases canceladas" className="text-slate-500">🚫 <strong>{st.entfallCount}</strong> Entf.</span>
+                        </div>
+                        <span className="font-bold text-slate-700">
+                          {st.avgPct !== null ? `${st.avgPct}%` : 'Sin nota'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* EXPLICACIÓN INFORMATIVA P2P */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
         <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5 mb-1">
           <RefreshCw className="w-4 h-4 text-indigo-600" />
@@ -3078,78 +3429,450 @@ function StatsAndP2PSyncView({ appData, setAppData, showToast }) {
 
 
 // ============================================================================
-// MODAL RECAP
+// MODAL RECAP DIARIO GUIADO (CON PARTICIPACIÓN 1-5 Y TACHADO DE VERTRETUNG / ENTFALL)
 // ============================================================================
-function DailyRecapWizardModal({ appData, studentId, onClose, upsertTopicAndSubtopic }) {
+function DailyRecapWizardModal({
+  appData,
+  studentId,
+  onClose,
+  upsertTopicAndSubtopic,
+  recordClassSessionOnly,
+}) {
   const student = appData.students.find((s) => s.id === studentId) || appData.students[0];
+  const jsDay = new Date().getDay();
+  const defaultWeekday = jsDay >= 1 && jsDay <= 5 ? jsDay : 1;
+  const [weekday, setWeekday] = useState(defaultWeekday);
+
+  const scheduledSubjectIds =
+    (appData.schedules[student.id] && appData.schedules[student.id][weekday]) || [];
   const studentSubjects = appData.subjects.filter((s) => s.student_id === student.id);
-  const [selectedSubjId, setSelectedSubjId] = useState(studentSubjects[0]?.id || '');
-  const [topicTitle, setTopicTitle] = useState('');
+
+  // Construimos la cola de asignaturas del día según su horario escolar
+  const dayQueue = useMemo(() => {
+    if (scheduledSubjectIds.length > 0) {
+      return scheduledSubjectIds
+        .map((id, idx) => {
+          const subj = studentSubjects.find((s) => s.id === id);
+          return subj ? { ...subj, period_idx: idx } : null;
+        })
+        .filter(Boolean);
+    }
+    return studentSubjects.map((s, idx) => ({ ...s, period_idx: idx }));
+  }, [scheduledSubjectIds, studentSubjects]);
+
+  const [queueIdx, setQueueIdx] = useState(0);
+  const currentSlot = dayQueue[queueIdx] || dayQueue[0];
+
+  // Estado del formulario para la asignatura actual
+  // sessionType: 'normal' | 'vertretung' | 'entfall'
+  const [sessionType, setSessionType] = useState('normal');
+  const [participation, setParticipation] = useState('2'); // '1' Muy alta, '2' Alta, '3' Normal, '5' Baja, 'na' No aplica
+
+  const existingTopicsForSubject = appData.topics.filter(
+    (t) => t.student_id === student.id && t.subject_id === currentSlot?.id
+  );
+
+  const [selectedTopicId, setSelectedTopicId] = useState(
+    existingTopicsForSubject[0]?.id || 'NEW'
+  );
+  const [newTopicTitle, setNewTopicTitle] = useState('');
   const [subtopicTitle, setSubtopicTitle] = useState('');
-  const [comp, setComp] = useState(2);
-  const [mins, setMins] = useState(30);
+  const [comp, setComp] = useState(3);
+  const [mins, setMins] = useState(20);
   const [notes, setNotes] = useState('');
 
-  const handleSave = () => {
-    if (!subtopicTitle.trim()) {
-      alert('Escribe qué subtema habéis visto hoy');
+  useEffect(() => {
+    const topics = appData.topics.filter(
+      (t) => t.student_id === student.id && t.subject_id === currentSlot?.id
+    );
+    setSelectedTopicId(topics[0]?.id || 'NEW');
+    setNewTopicTitle('');
+    setSubtopicTitle('');
+    setSessionType('normal');
+    setParticipation('2');
+    setComp(3);
+    setMins(20);
+    setNotes('');
+  }, [queueIdx, weekday, currentSlot?.id]);
+
+  const advanceOrClose = () => {
+    if (queueIdx < dayQueue.length - 1) {
+      setQueueIdx(queueIdx + 1);
+    } else {
+      onClose();
+    }
+  };
+
+  // Tachado rápido en 1 toque cuando es Vertretung o Entfall
+  const handleQuickVertretungOrEntfall = (statusType) => {
+    if (!currentSlot) return;
+    if (recordClassSessionOnly) {
+      recordClassSessionOnly({
+        student_id: student.id,
+        subject_id: currentSlot.id,
+        date: toDateStr(),
+        period_idx: currentSlot.period_idx || queueIdx,
+        status: statusType,
+        participation: statusType === 'entfall' ? 'na' : participation === '2' ? 'na' : participation,
+        note: notes.trim(),
+      });
+    }
+    advanceOrClose();
+  };
+
+  const handleSaveNormal = () => {
+    if (!currentSlot) return;
+    if (sessionType === 'vertretung' || sessionType === 'entfall') {
+      handleQuickVertretungOrEntfall(sessionType);
       return;
     }
+    if (selectedTopicId === 'NEW' && !newTopicTitle.trim()) {
+      alert('Escribe el nombre del Tema Principal nuevo (o marca arriba Vertretung si no dieron materia).');
+      return;
+    }
+    if (!subtopicTitle.trim()) {
+      alert('Escribe qué subtema habéis visto hoy en clase (o marca arriba Vertretung si no dieron temario).');
+      return;
+    }
+
     upsertTopicAndSubtopic({
       student_id: student.id,
-      subject_id: selectedSubjId,
-      topicIdOrNew: 'NEW',
-      newTopicTitle: topicTitle.trim() || 'Tema General',
+      subject_id: currentSlot.id,
+      topicIdOrNew: selectedTopicId,
+      newTopicTitle: newTopicTitle.trim() || 'Tema General',
       subtopicTitle,
       comprehension: comp,
+      participation,
+      period_idx: currentSlot.period_idx || queueIdx,
       minutes: mins,
       notes,
+      date: toDateStr(),
     });
-    onClose();
+    advanceOrClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3">
-      <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-4 space-y-3">
-        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-          <h3 className="font-bold text-sm">✨ Recap Diario • {student.name}</h3>
-          <button onClick={onClose} className="text-slate-400">✕</button>
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">Asignatura:</label>
-          <select value={selectedSubjId} onChange={(e) => setSelectedSubjId(e.target.value)} className="w-full rounded-xl border border-slate-300 p-2 text-xs font-bold">
-            {studentSubjects.map((s) => <option key={s.id} value={s.id}>{s.icon} {s.name}</option>)}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">Tema Principal (Unidad):</label>
-          <input type="text" value={topicTitle} onChange={(e) => setTopicTitle(e.target.value)} placeholder="Ej. Fracciones o Fotosíntesis" className="w-full rounded-xl border border-slate-300 p-2 text-xs" />
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">Subtema concreto visto hoy:</label>
-          <input type="text" value={subtopicTitle} onChange={(e) => setSubtopicTitle(e.target.value)} placeholder="Ej. Suma de fracciones con distinto denominador" className="w-full rounded-xl border border-slate-300 p-2 text-xs" />
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">Nivel de comprensión:</label>
-          <div className="grid grid-cols-2 gap-1.5">
-            {COMPREHENSION_LEVELS.map((lvl) => (
-              <button key={lvl.id} type="button" onClick={() => setComp(lvl.id)} className={`p-2 rounded-xl border text-xs font-bold text-left ${comp === lvl.id ? 'ring-2 ring-indigo-600 bg-indigo-50 border-indigo-500' : 'bg-slate-50'}`}>
-                {lvl.emoji} {lvl.short}
-              </button>
-            ))}
+    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-3">
+      <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[92vh] flex flex-col overflow-hidden">
+        {/* Cabecera */}
+        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300">
+              ✨ Recap Diario Guiado • {student.avatar} {student.name}
+            </span>
+            <h3 className="font-bold text-base">
+              {currentSlot ? `${queueIdx + 1}ª Hora: ${currentSlot.icon} ${currentSlot.name}` : 'Recap'}
+            </h3>
           </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">Pista o nota del profesor:</label>
-          <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Fórmula o clave dicha en clase" className="w-full rounded-xl border border-slate-300 p-2 text-xs" />
+        <div className="p-4 space-y-4 overflow-y-auto">
+          {/* Selector de día y barra de asignaturas del horario */}
+          <div>
+            <div className="flex items-center justify-between text-xs text-slate-500 mb-1.5">
+              <span>Asignaturas del horario escolar:</span>
+              <select
+                value={weekday}
+                onChange={(e) => {
+                  setWeekday(Number(e.target.value));
+                  setQueueIdx(0);
+                }}
+                className="bg-slate-100 border border-slate-300 rounded-lg px-2 py-0.5 text-xs font-bold text-slate-800"
+              >
+                {WEEKDAYS.map((w) => (
+                  <option key={w.key} value={w.key}>
+                    {w.name} ({w.de})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              {dayQueue.map((slot, idx) => (
+                <button
+                  key={`${slot.id}_${idx}`}
+                  type="button"
+                  onClick={() => setQueueIdx(idx)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 flex items-center gap-1 border transition ${
+                    idx === queueIdx
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                      : 'bg-slate-100 text-slate-600 border-slate-200'
+                  }`}
+                >
+                  <span>{idx + 1}. {slot.icon}</span>
+                  <span>{slot.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* BOTONES DE ESTADO DE LA CLASE: NORMAL VS VERTRETUNG VS ENTFALL */}
+          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
+            <div className="text-[11px] font-extrabold uppercase text-slate-600">
+              1. ¿Hubo clase normal hoy o fue Vertretung / Cancelada?
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSessionType('normal')}
+                className={`py-2 px-2 rounded-xl text-xs font-bold border transition ${
+                  sessionType === 'normal'
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                    : 'bg-white text-slate-700 border-slate-200'
+                }`}
+              >
+                📖 Clase Normal
+              </button>
+              <button
+                type="button"
+                onClick={() => setSessionType('vertretung')}
+                className={`py-2 px-2 rounded-xl text-xs font-bold border transition ${
+                  sessionType === 'vertretung'
+                    ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-sm'
+                    : 'bg-white text-amber-900 border-amber-300 hover:bg-amber-50'
+                }`}
+              >
+                🔄 Vertretung
+              </button>
+              <button
+                type="button"
+                onClick={() => setSessionType('entfall')}
+                className={`py-2 px-2 rounded-xl text-xs font-bold border transition ${
+                  sessionType === 'entfall'
+                    ? 'bg-slate-800 text-white border-slate-900 shadow-sm'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                }`}
+              >
+                🚫 Entfall
+              </button>
+            </div>
+
+            {/* Si elige Vertretung o Entfall: permite tachar directamente sin pedir temas */}
+            {(sessionType === 'vertretung' || sessionType === 'entfall') && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 space-y-2.5 mt-2">
+                <div className="text-xs font-bold text-amber-950">
+                  {sessionType === 'vertretung'
+                    ? '🔄 Sustitución (Vertretung): Quedará tachada en el horario de hoy sin tener que poner temas ni subtemas.'
+                    : '🚫 Clase cancelada (Entfall): Quedará tachada como hora libre y contará en las estadísticas.'}
+                </div>
+                <input
+                  type="text"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Nota opcional (ej. Hicimos deberes con el profe de guardia)..."
+                  className="w-full rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleQuickVertretungOrEntfall(sessionType)}
+                  className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow"
+                >
+                  {sessionType === 'vertretung'
+                    ? '✓ Tachar como Vertretung y Pasar a Siguiente'
+                    : '✓ Tachar como Entfall y Pasar a Siguiente'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {sessionType === 'normal' && (
+            <>
+              {/* PARTICIPACIÓN EN CLASE (MÜNDLICHE MITARBEIT: 1 A 5 + NO APLICA DISCRETO) */}
+              <div className="bg-emerald-50/50 border border-emerald-200 rounded-2xl p-3.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold uppercase text-emerald-950">
+                    2. 🙋‍♂️ Participación en clase hoy (Mündliche Mitarbeit):
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setParticipation('na')}
+                    className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold transition ${
+                      participation === 'na'
+                        ? 'bg-slate-700 text-white border-slate-700'
+                        : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    ⚪ No aplica hoy
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-4 gap-1.5">
+                  {PARTICIPATION_LEVELS.filter((p) => p.id !== 'na').map((p) => {
+                    const active = participation === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setParticipation(p.id)}
+                        className={`p-2 rounded-xl border text-center transition active:scale-95 ${
+                          active ? p.activeClass : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="text-lg leading-none">{p.emoji}</div>
+                        <div className="font-extrabold text-xs mt-1">{p.label}</div>
+                        <div className={`text-[10px] ${active ? 'opacity-90' : 'text-slate-500'}`}>
+                          Nota {p.id} ({p.pct}%)
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* TEMA PRINCIPAL Y SUBTEMA VISTO HOY */}
+              <div className="bg-indigo-50/60 border border-indigo-200 rounded-2xl p-3.5 space-y-2.5">
+                <div className="text-xs font-extrabold uppercase text-indigo-900">
+                  3. 📚 ¿Qué tema y subtema habéis visto hoy?
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Tema Principal (Unidad):
+                  </label>
+                  <select
+                    value={selectedTopicId}
+                    onChange={(e) => setSelectedTopicId(e.target.value)}
+                    className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-bold"
+                  >
+                    {existingTopicsForSubject.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        📂 {t.title} ({t.subtopics.length} subtemas)
+                      </option>
+                    ))}
+                    <option value="NEW">➕ Crear un Tema Principal nuevo...</option>
+                  </select>
+                </div>
+
+                {selectedTopicId === 'NEW' && (
+                  <div>
+                    <label className="block text-xs font-bold text-indigo-800 mb-1">
+                      Título del nuevo Tema Principal:
+                    </label>
+                    <input
+                      type="text"
+                      value={newTopicTitle}
+                      onChange={(e) => setNewTopicTitle(e.target.value)}
+                      placeholder="Ej. Fracciones (Bruchrechnung) o Fotosíntesis"
+                      className="w-full rounded-xl border border-indigo-300 bg-white p-2 text-xs"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Subtema concreto visto hoy:
+                  </label>
+                  <input
+                    type="text"
+                    value={subtopicTitle}
+                    onChange={(e) => setSubtopicTitle(e.target.value)}
+                    placeholder="Ej. Suma de fracciones con distinto denominador"
+                    className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* NIVEL DE COMPRENSIÓN */}
+              <div>
+                <label className="block text-xs font-extrabold uppercase text-slate-700 mb-1.5">
+                  4. 🧠 ¿Cómo de bien lo has entendido hoy?
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {COMPREHENSION_LEVELS.map((lvl) => (
+                    <button
+                      key={lvl.id}
+                      type="button"
+                      onClick={() => setComp(lvl.id)}
+                      className={`p-2 rounded-xl border text-xs font-bold text-left flex items-center justify-between ${
+                        comp === lvl.id
+                          ? 'ring-2 ring-indigo-600 bg-indigo-50 border-indigo-500'
+                          : 'bg-slate-50 border-slate-200'
+                      }`}
+                    >
+                      <span>
+                        {lvl.emoji} {lvl.short}
+                      </span>
+                      <span className="text-[10px] text-slate-400">{lvl.days}d</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* TIEMPO Y NOTA CLAVE */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    ⏱️ Tiempo de repaso hoy:
+                  </label>
+                  <div className="flex items-center gap-1">
+                    {[0, 15, 30, 45].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setMins(m)}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold border ${
+                          mins === m
+                            ? 'bg-slate-900 text-white border-slate-900'
+                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        {m === 0 ? '0m' : `+${m}m`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    💡 Pista o nota del profesor:
+                  </label>
+                  <input
+                    type="text"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Fórmula o clave dicha en clase"
+                    className="w-full rounded-xl border border-slate-300 p-1.5 text-xs"
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
-        <button onClick={handleSave} className="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow">Guardar Recap</button>
+        {/* Botonera inferior */}
+        <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
+          {queueIdx < dayQueue.length - 1 ? (
+            <button
+              type="button"
+              onClick={() => setQueueIdx(queueIdx + 1)}
+              className="px-3 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-600 text-xs font-bold"
+            >
+              Saltar hora →
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-600 text-xs font-bold"
+            >
+              Cerrar
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleSaveNormal}
+            className="flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow"
+          >
+            {sessionType === 'normal'
+              ? queueIdx < dayQueue.length - 1
+                ? 'Guardar y Siguiente Hora →'
+                : 'Guardar y Terminar Recap'
+              : '✓ Confirmar Tachado'}
+          </button>
+        </div>
       </div>
     </div>
   );
