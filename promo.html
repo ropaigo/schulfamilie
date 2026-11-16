@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SchulFamilie — Google Play Store Promo Video (1920×1080 • Deutsch)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: #090d16;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+    }
+    canvas {
+      box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.75);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 gap-5">
+
+  <!-- Cabecera de control -->
+  <div class="w-full max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-emerald-500 flex items-center justify-center text-2xl shadow">
+        🎬
+      </div>
+      <div>
+        <h1 class="font-extrabold text-base sm:text-lg text-white leading-tight">
+          SchulFamilie — Google Play Promo Video (1920×1080 • Deutsch)
+        </h1>
+        <p class="text-xs text-slate-400">
+          28.5s • 16:9 Full HD • Sin sonido • E2EE Cloud + KI-Scan + Active Recall + Noten 1–6
+        </p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2 w-full sm:w-auto">
+      <button
+        id="btn-restart"
+        class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition"
+      >
+        ↺ Reiniciar
+      </button>
+      <button
+        id="btn-export"
+        class="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white text-xs sm:text-sm font-extrabold shadow-lg transition flex items-center justify-center gap-2"
+      >
+        <span>⬇️ Descargar Vídeo (Full HD)</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Barra de progreso de exportación -->
+  <div id="export-status" class="hidden w-full max-w-5xl bg-indigo-950/80 border border-indigo-500/40 rounded-2xl p-4 space-y-2">
+    <div class="flex items-center justify-between text-xs font-bold text-indigo-200">
+      <span id="export-label">Grabando vídeo en Full HD (1920×1080 a 60 FPS)... No cierres esta pestaña.</span>
+      <span id="export-pct">0%</span>
+    </div>
+    <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden">
+      <div id="export-bar" class="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-150" style="width: 0%"></div>
+    </div>
+  </div>
+
+  <!-- Canvas 1920x1080 escalado responsivamente -->
+  <div class="w-full max-w-5xl">
+    <canvas id="promoCanvas" width="1920" height="1080" class="w-full h-auto bg-slate-950"></canvas>
+  </div>
+
+  <!-- Indicador de escenas / Timeline -->
+  <div class="w-full max-w-5xl grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-[11px]">
+    <button onclick="jumpTo(0)" class="scene-btn p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500 transition">
+      <div class="font-bold text-indigo-400">1. Hook</div>
+      <div class="text-slate-400">0s – 4.5s</div>
+    </button>
+    <button onclick="jumpTo(4.5)" class="scene-btn p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500 transition">
+      <div class="font-bold text-emerald-400">2. KI-Scan & Recap</div>
+      <div class="text-slate-400">4.5s – 9.5s</div>
+    </button>
+    <button onclick="jumpTo(9.5)" class="scene-btn p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500 transition">
+      <div class="font-bold text-sky-400">3. E2EE Cloud</div>
+      <div class="text-slate-400">9.5s – 14.5s</div>
+    </button>
+    <button onclick="jumpTo(14.5)" class="scene-btn p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500 transition">
+      <div class="font-bold text-amber-400">4. Active Recall</div>
+      <div class="text-slate-400">14.5s – 19.5s</div>
+    </button>
+    <button onclick="jumpTo(19.5)" class="scene-btn p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500 transition">
+      <div class="font-bold text-rose-400">5. Kalender & 1–6</div>
+      <div class="text-slate-400">19.5s – 24.5s</div>
+    </button>
+    <button onclick="jumpTo(24.5)" class="scene-btn p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500 transition">
+      <div class="font-bold text-purple-400">6. Google Play</div>
+      <div class="text-slate-400">24.5s – 28.5s</div>
+    </button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('promoCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = 1920;
+    const H = 1080;
+    const TOTAL_DURATION = 28.5; // segundos
+
+    let startTime = performance.now();
+    let isExporting = false;
+
+    window.jumpTo = (sec) => {
+      if (isExporting) return;
+      startTime = performance.now() - sec * 1000;
+    };
+
+    document.getElementById('btn-restart').addEventListener('click', () => {
+      if (isExporting) return;
+      startTime = performance.now();
+    });
+
+    // =========================================================================
+    // UTILIDADES DE EASING Y DIBUJO VECTORIAL NITIDO (1920x1080)
+    // =========================================================================
+    const clamp = (v, min = 0, max = 1) => Math.max(min, Math.min(max, v));
+    const easeOutCubic = (t) => 1 - Math.pow(1 - clamp(t), 3);
+    const easeOutBack = (t) => {
+      const c1 = 1.70158;
+      const c3 = c1 + 1;
+      const x = clamp(t);
+      return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+    };
+    const easeInOut = (t) => {
+      const x = clamp(t);
+      return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+    };
+
+    function roundRect(x, y, w, h, r, fill, stroke, strokeWidth = 2) {
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, r);
+      if (fill) {
+        ctx.fillStyle = fill;
+        ctx.fill();
+      }
+      if (stroke) {
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = strokeWidth;
+        ctx.stroke();
+      }
+    }
+
+    function drawText(text, x, y, {
+      size = 48,
+      weight = '800',
+      color = '#ffffff',
+      align = 'left',
+      maxWidth = 1600,
+      alpha = 1
+    } = {}) {
+      ctx.save();
+      ctx.globalAlpha = clamp(alpha);
+      ctx.font = `${weight} ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif`;
+      ctx.fillStyle = color;
+      ctx.textAlign = align;
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, x, y, maxWidth);
+      ctx.restore();
+    }
+
+    function drawBadge(text, x, y, bgColor, textColor, borderColor, alpha = 1) {
+      ctx.save();
+      ctx.globalAlpha = clamp(alpha);
+      ctx.font = '800 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      const padX = 24;
+      const w = ctx.measureText(text).width + padX * 2;
+      const h = 48;
+      roundRect(x, y, w, h, 24, bgColor, borderColor, 2);
+      ctx.fillStyle = textColor;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, x + w / 2, y + h / 2 + 1);
+      ctx.restore();
+      return w;
+    }
+
+    // Dibuja un smartphone Android moderno con muesca/cámara y pantalla personalizable
+    function drawAndroidPhone(x, y, w, h, drawScreenFn, alpha = 1) {
+      ctx.save();
+      ctx.globalAlpha = clamp(alpha);
+      // Sombra exterior
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
+      ctx.shadowBlur = 50;
+      ctx.shadowOffsetY = 25;
+      // Marco metálico del teléfono
+      roundRect(x, y, w, h, 52, '#0f172a', '#334155', 6);
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+
+      // Pantalla interior
+      const pad = 16;
+      const sx = x + pad;
+      const sy = y + pad;
+      const sw = w - pad * 2;
+      const sh = h - pad * 2;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(sx, sy, sw, sh, 38);
+      ctx.clip();
+
+      // Fondo blanco/slate de pantalla
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillRect(sx, sy, sw, sh);
+
+      // Contenido personalizado de la pantalla
+      if (drawScreenFn) drawScreenFn(sx, sy, sw, sh);
+
+      // Barra de estado superior Android + cámara punch-hole
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+      ctx.fillRect(sx, sy, sw, 42);
+      ctx.beginPath();
+      ctx.arc(sx + sw / 2, sy + 21, 9, 0, Math.PI * 2);
+      ctx.fillStyle = '#020617';
+      ctx.fill();
+      drawText('16:30', sx + 26, sy + 22, { size: 16, weight: '700', color: '#e2e8f0' });
+      drawText('5G  100%', sx + sw - 24, sy + 22, { size: 15, weight: '700', color: '#e2e8f0', align: 'right' });
+
+      ctx.restore();
+      ctx.restore();
+    }
+
+    function drawBackground(t) {
+      const grad = ctx.createLinearGradient(0, 0, W, H);
+      grad.addColorStop(0, '#090d16');
+      grad.addColorStop(0.55, '#0f172a');
+      grad.addColorStop(1, '#1e1b4b');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, W, H);
+
+      // Orbes ambientales sutiles en movimiento
+      ctx.save();
+      const ox1 = 320 + Math.sin(t * 0.4) * 80;
+      const oy1 = 220 + Math.cos(t * 0.3) * 60;
+      const g1 = ctx.createRadialGradient(ox1, oy1, 20, ox1, oy1, 520);
+      g1.addColorStop(0, 'rgba(79, 70, 229, 0.24)');
+      g1.addColorStop(1, 'rgba(79, 70, 229, 0)');
+      ctx.fillStyle = g1;
+      ctx.fillRect(0, 0, W, H);
+
+      const ox2 = 1580 + Math.cos(t * 0.35) * 90;
+      const oy2 = 840 + Math.sin(t * 0.45) * 70;
+      const g2 = ctx.createRadialGradient(ox2, oy2, 20, ox2, oy2, 560);
+      g2.addColorStop(0, 'rgba(16, 185, 129, 0.18)');
+      g2.addColorStop(1, 'rgba(16, 185, 129, 0)');
+      ctx.fillStyle = g2;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
+
+    // =========================================================================
+    // ESCENA 1 (0s - 4.5s): HOOK DEL PROBLEMA EN ALEMANIA
+    // =========================================================================
+    function renderScene1(localT) {
+      const p1 = easeOutCubic(localT / 0.7);
+      const p2 = easeOutCubic((localT - 1.1) / 0.7);
+      const p3 = easeOutBack((localT - 2.3) / 0.8);
+      const fadeOut = localT > 4.0 ? 1 - easeInOut((localT - 4.0) / 0.5) : 1;
+
+      ctx.save();
+      ctx.globalAlpha = fadeOut;
+
+      // Pregunta gancho
+      drawText('„Wie war die Schule heute?“', W / 2, 310 - (1 - p1) * 40, {
+        size: 74, weight: '900', color: '#f8fafc', align: 'center', alpha: p1
+      });
+
+      drawText('„Gut.“ — Und 3 Tage vor der Klassenarbeit fehlt der Überblick...', W / 2, 420 - (1 - p2) * 30, {
+        size: 40, weight: '600', color: '#94a3b8', align: 'center', alpha: p2
+      });
+
+      // Tarjeta solución
+      if (localT > 2.2) {
+        const scale = 0.85 + 0.15 * clamp(p3);
+        ctx.save();
+        ctx.translate(W / 2, 690);
+        ctx.scale(scale, scale);
+        roundRect(-480, -135, 960, 270, 36, 'rgba(30, 41, 59, 0.85)', 'rgba(99, 102, 241, 0.6)', 3);
+        drawText('🎒', -360, 0, { size: 110, align: 'center', alpha: p3 });
+        drawText('SchulFamilie', -240, -45, { size: 68, weight: '900', color: '#ffffff', alpha: p3 });
+        drawText('Der smarte Lern-Begleiter für Eltern & Schüler', -240, 28, { size: 30, weight: '600', color: '#a5b4fc', alpha: p3 });
+        drawText('🇩🇪 System 1+ bis 6  •  Stundenplan  •  Active Recall', -240, 82, { size: 24, weight: '700', color: '#34d399', alpha: p3 });
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    // =========================================================================
+    // ESCENA 2 (4.5s - 9.5s): KI-FOTO-SCAN & 3-MINUTEN RECAP
+    // =========================================================================
+    function renderScene2(localT) {
+      const enter = easeOutCubic(localT / 0.6);
+      const exit = localT > 4.5 ? 1 - easeInOut((localT - 4.5) / 0.5) : 1;
+      const alpha = enter * exit;
+
+      // Columna izquierda: Texto comercial en alemán
+      const tx = 130 - (1 - enter) * 60;
+      drawBadge('📸 KI-FOTO-SCAN & DAILY RECAP', tx, 240, 'rgba(16, 185, 129, 0.18)', '#34d399', 'rgba(16, 185, 129, 0.5)', alpha);
+      drawText('Heft oder Stundenplan', tx, 360, { size: 66, weight: '900', color: '#ffffff', alpha });
+      drawText('abfotografieren. Fertig.', tx, 445, { size: 66, weight: '900', color: '#34d399', alpha });
+
+      drawText('KI erkennt automatisch Thema, Unterthema & Hausaufgaben.', tx, 560, { size: 32, weight: '500', color: '#cbd5e1', alpha });
+      drawText('Inklusive Mündliche Mitarbeit (1–5) & 🔄 Vertretung.', tx, 615, { size: 32, weight: '500', color: '#cbd5e1', alpha });
+
+      // Píldoras de características
+      drawBadge('🌟 Mitarbeit: Note 1–5', tx, 710, 'rgba(255,255,255,0.08)', '#e2e8f0', 'rgba(255,255,255,0.2)', alpha);
+      drawBadge('🔄 1-Klick Vertretung / Entfall', tx + 360, 710, 'rgba(245, 158, 11, 0.18)', '#fcd34d', 'rgba(245, 158, 11, 0.4)', alpha);
+
+      // Columna derecha: Teléfono Android mostrando el escaneo IA y Recap
+      const px = 1190;
+      const py = 95 + (1 - enter) * 60;
+      drawAndroidPhone(px, py, 480, 890, (sx, sy, sw, sh) => {
+        // Header de app
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(sx, sy + 42, sw, 110);
+        drawText('✨ Daily Recap • Montag', sx + 24, sy + 82, { size: 22, weight: '800', color: '#ffffff' });
+        drawText('📐 Mathematik (1. Stunde)', sx + 24, sy + 120, { size: 18, weight: '600', color: '#a5b4fc' });
+
+        // Tarjeta KI-Scan
+        roundRect(sx + 20, sy + 172, sw - 40, 175, 20, '#eef2ff', '#818cf8', 2);
+        drawText('📸 KI-Heft-Scanner aktiv', sx + 38, sy + 204, { size: 18, weight: '800', color: '#3730a3' });
+        roundRect(sx + 38, sy + 228, sw - 76, 95, 14, '#ffffff', '#c7d2fe', 1.5);
+        drawText('📂 Thema: Bruchrechnung', sx + 54, sy + 256, { size: 16, weight: '800', color: '#1e293b' });
+        drawText('📄 Subthema: Kehrwert-Division', sx + 54, sy + 286, { size: 15, weight: '600', color: '#475569' });
+        drawText('📝 „Zweiten Bruch umdrehen & kürzen“', sx + 54, sy + 310, { size: 13, weight: '600', color: '#059669' });
+
+        // Láser de escaneo animado
+        const scanY = sy + 185 + ((Math.sin(localT * 4) + 1) / 2) * 140;
+        if (localT < 2.5) {
+          ctx.fillStyle = 'rgba(16, 185, 129, 0.7)';
+          ctx.fillRect(sx + 26, scanY, sw - 52, 4);
+        }
+
+        // Bloque de Mündliche Mitarbeit (1 a 5)
+        roundRect(sx + 20, sy + 368, sw - 40, 180, 20, '#ffffff', '#cbd5e1', 1.5);
+        drawText('🙋‍♂️ Mündliche Mitarbeit heute:', sx + 38, sy + 402, { size: 17, weight: '800', color: '#0f172a' });
+        const grades = [
+          { n: '🌟 1', lbl: 'Sehr gut', active: localT > 1.8 },
+          { n: '🙋 2', lbl: 'Gut', active: false },
+          { n: '🙂 3', lbl: 'Normal', active: false },
+          { n: '😶 5', lbl: 'Wenig', active: false },
+        ];
+        grades.forEach((g, idx) => {
+          const bx = sx + 34 + idx * 96;
+          const by = sy + 432;
+          roundRect(bx, by, 88, 92, 14, g.active ? '#059669' : '#f8fafc', g.active ? '#059669' : '#cbd5e1', 2);
+          drawText(g.n, bx + 44, by + 32, { size: 20, weight: '800', color: g.active ? '#fff' : '#0f172a', align: 'center' });
+          drawText(g.lbl, bx + 44, by + 66, { size: 13, weight: '700', color: g.active ? '#d1fae5' : '#64748b', align: 'center' });
+        });
+
+        // Bloque Vertretung / Entfall
+        roundRect(sx + 20, sy + 570, sw - 40, 95, 20, '#fffbeb', '#f59e0b', 1.5);
+        drawText('2. Stunde: 📖 Deutsch', sx + 38, sy + 602, { size: 16, weight: '700', color: '#78350f' });
+        drawBadge('🔄 Vertretung (ohne Thema)', sx + 38, sy + 622, '#fef3c7', '#92400e', '#f59e0b', 1);
+
+        // Botón guardar
+        roundRect(sx + 20, sy + 760, sw - 40, 64, 18, '#4f46e5', null);
+        drawText('✓ Recap speichern & weiter', sx + sw / 2, sy + 792, { size: 19, weight: '800', color: '#ffffff', align: 'center' });
+      }, alpha);
+    }
+
+    // =========================================================================
+    // ESCENA 3 (9.5s - 14.5s): NUBE CIEGA E2EE (SINCRONIZACIÓN AUTOMÁTICA)
+    // =========================================================================
+    function renderScene3(localT) {
+      const enter = easeOutCubic(localT / 0.6);
+      const exit = localT > 4.5 ? 1 - easeInOut((localT - 4.5) / 0.5) : 1;
+      const alpha = enter * exit;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      // Título superior centrado
+      drawBadge('🔒 ENDE-ZU-ENDE-VERSCHLÜSSELT (E2EE)', W / 2 - 260, 80, 'rgba(56, 189, 248, 0.18)', '#38bdf8', 'rgba(56, 189, 248, 0.5)', alpha);
+      drawText('Automatischer Familien-Sync über die Cloud', W / 2, 185, { size: 60, weight: '900', color: '#ffffff', align: 'center' });
+      drawText('Einmal per QR-Code koppeln. Niemand außer euch kann mitlesen.', W / 2, 250, { size: 30, weight: '500', color: '#cbd5e1', align: 'center' });
+
+      // Teléfono izquierdo: Kind (Enrique / Fernando)
+      drawAndroidPhone(210, 340, 360, 640, (sx, sy, sw, sh) => {
+        ctx.fillStyle = '#4f46e5';
+        ctx.fillRect(sx, sy + 42, sw, 85);
+        drawText('👦🏻 Kinder-Handy', sx + 22, sy + 86, { size: 22, weight: '800', color: '#ffffff' });
+        roundRect(sx + 20, sy + 150, sw - 40, 170, 18, '#ffffff', '#cbd5e1', 1.5);
+        drawText('✅ Recap gespeichert', sx + 38, sy + 185, { size: 18, weight: '800', color: '#059669' });
+        drawText('📐 Bruchrechnung', sx + 38, sy + 222, { size: 17, weight: '700', color: '#0f172a' });
+        drawText('🌟 Mitarbeit: Note 1', sx + 38, sy + 256, { size: 16, weight: '600', color: '#4f46e5' });
+        drawText('🔐 Verschlüsselt lokal...', sx + 38, sy + 292, { size: 15, weight: '700', color: '#64748b' });
+      }, alpha);
+
+      // Centro: Nube Ciega E2EE
+      const pulse = 1 + Math.sin(localT * 5) * 0.04;
+      ctx.save();
+      ctx.translate(W / 2, 640);
+      ctx.scale(pulse, pulse);
+      roundRect(-210, -155, 420, 310, 40, 'rgba(15, 23, 42, 0.92)', '#38bdf8', 3);
+      drawText('☁️🔒', 0, -65, { size: 78, align: 'center' });
+      drawText('Blinde E2EE-Cloud', 0, 20, { size: 30, weight: '900', color: '#ffffff', align: 'center' });
+      drawText('Zero-Knowledge Relay', 0, 62, { size: 20, weight: '700', color: '#38bdf8', align: 'center' });
+      drawText('DSGVO-konform 🇩🇪', 0, 102, { size: 20, weight: '800', color: '#34d399', align: 'center' });
+      ctx.restore();
+
+      // Partículas de datos cifrados viajando de izquierda -> nube -> derecha
+      for (let i = 0; i < 4; i++) {
+        const prog = ((localT * 0.65 + i * 0.25) % 1);
+        const px = 580 + prog * 760;
+        const py = 640 - Math.sin(prog * Math.PI) * 90;
+        roundRect(px - 28, py - 20, 56, 40, 12, '#0284c7', '#7dd3fc', 2);
+        drawText('🔒', px, py + 1, { size: 20, align: 'center' });
+      }
+
+      // Teléfono derecho: Eltern-Modus
+      drawAndroidPhone(1350, 340, 360, 640, (sx, sy, sw, sh) => {
+        ctx.fillStyle = '#d97706';
+        ctx.fillRect(sx, sy + 42, sw, 85);
+        drawText('👨‍👦‍👦 Eltern-Handy', sx + 22, sy + 86, { size: 22, weight: '800', color: '#ffffff' });
+        roundRect(sx + 20, sy + 150, sw - 40, 195, 18, '#ffffff', '#f59e0b', 2);
+        drawText('🔄 Live synchronisiert!', sx + 38, sy + 185, { size: 18, weight: '800', color: '#d97706' });
+        drawText('👦🏻 Enrique · ⏱️ 45m heute', sx + 38, sy + 222, { size: 16, weight: '700', color: '#0f172a' });
+        drawText('👦🏼 Fernando · ⏱️ 30m heute', sx + 38, sy + 256, { size: 16, weight: '700', color: '#0f172a' });
+        drawText('⚡ 3 Active Recalls bereit', sx + 38, sy + 295, { size: 16, weight: '800', color: '#4f46e5' });
+      }, alpha);
+
+      ctx.restore();
+    }
+
+    // =========================================================================
+    // ESCENA 4 (14.5s - 19.5s): ELTERN-MODUS: ACTIVE RECALL ORAL
+    // =========================================================================
+    function renderScene4(localT) {
+      const enter = easeOutCubic(localT / 0.6);
+      const exit = localT > 4.5 ? 1 - easeInOut((localT - 4.5) / 0.5) : 1;
+      const alpha = enter * exit;
+
+      // Izquierda: Móvil del Padre con tarjeta de Active Recall
+      drawAndroidPhone(180, 95 + (1 - enter) * 50, 490, 890, (sx, sy, sw, sh) => {
+        ctx.fillStyle = '#d97706';
+        ctx.fillRect(sx, sy + 42, sw, 95);
+        drawText('⚡ Active Recall • Eltern-Modus', sx + 24, sy + 88, { size: 21, weight: '800', color: '#ffffff' });
+
+        // Tarjeta de pregunta
+        roundRect(sx + 20, sy + 160, sw - 40, 520, 24, '#ffffff', '#f59e0b', 3);
+        drawBadge('📐 Mathematik • Bruchrechnung', sx + 38, sy + 182, '#eef2ff', '#3730a3', '#c7d2fe', 1);
+
+        drawText('❓ Frage an dein Kind:', sx + 38, sy + 260, { size: 16, weight: '700', color: '#64748b' });
+        drawText('„Wie dividiert man', sx + 38, sy + 300, { size: 26, weight: '900', color: '#0f172a' });
+        drawText('zwei Brüche?“', sx + 38, sy + 335, { size: 26, weight: '900', color: '#0f172a' });
+
+        // Chuleta para padres
+        roundRect(sx + 36, sy + 380, sw - 72, 130, 16, '#fffbeb', '#fcd34d', 1.5);
+        drawText('💡 Spickzettel für Eltern:', sx + 52, sy + 408, { size: 16, weight: '800', color: '#92400e' });
+        drawText('Mit dem Kehrwert des zweiten', sx + 52, sy + 442, { size: 16, weight: '600', color: '#1e293b' });
+        drawText('Bruchs multiplizieren & kürzen.', sx + 52, sy + 472, { size: 16, weight: '600', color: '#1e293b' });
+
+        // Botones de calificación SM-2
+        drawText('Wie gut war die Antwort?', sx + sw / 2, sy + 545, { size: 15, weight: '700', color: '#64748b', align: 'center' });
+        const btns = [
+          { t: '🔄 Nochmal', sub: 'Morgen', c: '#fef2f2', b: '#fca5a5', active: false },
+          { t: '😓 Mit Hilfe', sub: '2-3 Tage', c: '#fffbeb', b: '#fcd34d', active: false },
+          { t: '👍 Gut', sub: '4-5 Tage', c: '#ecfdf5', b: '#6ee7b7', active: false },
+          { t: '🚀 Perfekt', sub: '+7 Tage', c: '#4f46e5', b: '#4f46e5', active: localT > 2.1 },
+        ];
+        btns.forEach((b, idx) => {
+          const col = idx % 2;
+          const row = Math.floor(idx / 2);
+          const bx = sx + 36 + col * 195;
+          const by = sy + 575 + row * 72;
+          roundRect(bx, by, 185, 62, 14, b.active ? '#4f46e5' : b.c, b.b, 2);
+          drawText(b.t, bx + 92, by + 23, { size: 16, weight: '800', color: b.active ? '#ffffff' : '#0f172a', align: 'center' });
+          drawText(b.sub, bx + 92, by + 46, { size: 12, weight: '600', color: b.active ? '#c7d2fe' : '#64748b', align: 'center' });
+        });
+      }, alpha);
+
+      // Derecha: Copy comercial en alemán
+      const rx = 790 + (1 - enter) * 60;
+      drawBadge('⚡ ACTIVE RECALL FÜR ELTERN', rx, 270, 'rgba(245, 158, 11, 0.2)', '#fcd34d', 'rgba(245, 158, 11, 0.5)', alpha);
+      drawText('Abfragen wie ein Profi –', rx, 390, { size: 64, weight: '900', color: '#ffffff', alpha });
+      drawText('auch ohne Fachwissen.', rx, 475, { size: 64, weight: '900', color: '#fbbf24', alpha });
+
+      drawText('Du bekommst die fertige Frage + Musterlösung.', rx, 585, { size: 32, weight: '500', color: '#cbd5e1', alpha });
+      drawText('Intelligente Wiederholung genau vor jeder Prüfung.', rx, 640, { size: 32, weight: '500', color: '#cbd5e1', alpha });
+    }
+
+    // =========================================================================
+    // ESCENA 5 (19.5s - 24.5s): PRÜFUNGSKALENDER & NOTENSYSTEM (1+ BIS 6)
+    // =========================================================================
+    function renderScene5(localT) {
+      const enter = easeOutCubic(localT / 0.6);
+      const exit = localT > 4.5 ? 1 - easeInOut((localT - 4.5) / 0.5) : 1;
+      const alpha = enter * exit;
+
+      // Izquierda: Copy alemán
+      const tx = 110 - (1 - enter) * 50;
+      drawBadge('🗓️ KALENDER & NOTENSYSTEM 1+ BIS 6', tx, 230, 'rgba(244, 63, 94, 0.2)', '#fda4af', 'rgba(244, 63, 94, 0.5)', alpha);
+      drawText('Alle Klassenarbeiten', tx, 350, { size: 62, weight: '900', color: '#ffffff', alpha });
+      drawText('& Noten im Blick.', tx, 430, { size: 62, weight: '900', color: '#fb7185', alpha });
+
+      drawText('Automatische Warnstufen (🔴 1T • 🟠 3T • 🟡 7T),', tx, 540, { size: 30, weight: '500', color: '#cbd5e1', alpha });
+      drawText('Hausaufgaben 📌 & Notendurchschnitt Ø 1,7.', tx, 590, { size: 30, weight: '500', color: '#cbd5e1', alpha });
+
+      // Badge Media Alemana
+      roundRect(tx, 665, 420, 95, 22, 'rgba(16, 185, 129, 0.16)', 'rgba(16, 185, 129, 0.5)', 2);
+      drawText('🇩🇪 Notendurchschnitt', tx + 24, 696, { size: 20, weight: '700', color: '#6ee7b7', alpha });
+      drawText('Ø 1,7 (Sehr gut / Gut)', tx + 24, 732, { size: 28, weight: '900', color: '#ffffff', alpha });
+
+      // Derecha: Tarjeta Grande de Calendario Mensual Tipo Tabla
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      const cx = 920;
+      const cy = 150 + (1 - enter) * 40;
+      const cw = 890;
+      const ch = 780;
+
+      roundRect(cx, cy, cw, ch, 30, '#ffffff', '#cbd5e1', 2);
+      // Cabecera calendario
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.roundRect(cx, cy, cw, 110, [30, 30, 0, 0]);
+      ctx.fill();
+      drawText('🗓️ Prüfungskalender • November', cx + 36, cy + 56, { size: 30, weight: '900', color: '#ffffff' });
+      drawBadge('👨‍👦‍👦 Enrique & Fernando', cx + cw - 300, cy + 32, '#f59e0b', '#0f172a', null, 1);
+
+      // Días Mo - So
+      const days = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+      const colW = cw / 7;
+      days.forEach((d, i) => {
+        ctx.fillStyle = '#f1f5f9';
+        ctx.fillRect(cx + i * colW, cy + 110, colW, 44);
+        drawText(d, cx + i * colW + colW / 2, cy + 132, { size: 18, weight: '800', color: '#475569', align: 'center' });
+      });
+
+      // Cuadrícula 4x7
+      const rowH = (ch - 154) / 4;
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 7; c++) {
+          const cellX = cx + c * colW;
+          const cellY = cy + 154 + r * rowH;
+          const dayNum = r * 7 + c + 1;
+          ctx.strokeStyle = '#e2e8f0';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(cellX, cellY, colW, rowH);
+
+          const isToday = dayNum === 16;
+          if (isToday) {
+            roundRect(cellX + 8, cellY + 8, 34, 34, 17, '#4f46e5', null);
+            drawText(String(dayNum), cellX + 25, cellY + 25, { size: 17, weight: '800', color: '#ffffff', align: 'center' });
+          } else {
+            drawText(String(dayNum), cellX + 18, cellY + 24, { size: 17, weight: '700', color: '#334155' });
+          }
+
+          // Eventos de ejemplo realistas
+          if (dayNum === 6) {
+            roundRect(cellX + 6, cellY + 48, colW - 12, 34, 8, '#ecfdf5', '#10b981', 1.5);
+            drawText('🏅 Bio 1+', cellX + 14, cellY + 65, { size: 14, weight: '800', color: '#065f46' });
+          }
+          if (dayNum === 16) {
+            roundRect(cellX + 6, cellY + 48, colW - 12, 34, 8, '#fffbeb', '#f59e0b', 1.5);
+            drawText('⚡ 2 Recalls', cellX + 12, cellY + 65, { size: 13, weight: '800', color: '#92400e' });
+            roundRect(cellX + 6, cellY + 88, colW - 12, 30, 8, '#eef2ff', '#818cf8', 1.5);
+            drawText('📝 3 Fächer', cellX + 12, cellY + 103, { size: 13, weight: '700', color: '#3730a3' });
+          }
+          if (dayNum === 18) {
+            roundRect(cellX + 6, cellY + 48, colW - 12, 38, 8, '#fef2f2', '#ef4444', 2);
+            drawText('🔴 Mathe', cellX + 12, cellY + 67, { size: 14, weight: '900', color: '#991b1b' });
+            drawText('📌', cellX + colW - 22, cellY + 24, { size: 16, align: 'center' });
+          }
+          if (dayNum === 23) {
+            roundRect(cellX + 6, cellY + 48, colW - 12, 38, 8, '#fefce8', '#eab308', 2);
+            drawText('🟡 Englisch', cellX + 10, cellY + 67, { size: 13, weight: '800', color: '#854d0e' });
+          }
+        }
+      }
+      ctx.restore();
+    }
+
+    // =========================================================================
+    // ESCENA 6 (24.5s - 28.5s): OUTRO & GOOGLE PLAY CTA
+    // =========================================================================
+    function renderScene6(localT) {
+      const p = easeOutBack(localT / 0.8);
+      const p2 = easeOutCubic((localT - 0.6) / 0.7);
+
+      ctx.save();
+      const scale = 0.8 + 0.2 * clamp(p);
+      ctx.translate(W / 2, 360);
+      ctx.scale(scale, scale);
+      roundRect(-110, -110, 220, 220, 52, '#4f46e5', '#818cf8', 4);
+      drawText('🎒', 0, 8, { size: 120, align: 'center', alpha: p });
+      ctx.restore();
+
+      drawText('SchulFamilie', W / 2, 545, { size: 84, weight: '900', color: '#ffffff', align: 'center', alpha: p });
+      drawText('Weniger Schulstress. Bessere Noten. Mehr Familienzeit.', W / 2, 635, { size: 36, weight: '600', color: '#a5b4fc', align: 'center', alpha: p2 });
+
+      // Botón estilo Google Play
+      if (localT > 0.7) {
+        roundRect(W / 2 - 260, 725, 520, 110, 24, '#0f172a', '#475569', 3);
+        drawText('▶️', W / 2 - 190, 780, { size: 46, align: 'center', alpha: p2 });
+        drawText('JETZT BEI', W / 2 - 130, 758, { size: 18, weight: '700', color: '#94a3b8', alpha: p2 });
+        drawText('Google Play', W / 2 - 130, 795, { size: 42, weight: '900', color: '#ffffff', alpha: p2 });
+        drawText('🔒 100 % E2EE • DSGVO-konform • Für Android & iOS', W / 2, 890, { size: 22, weight: '700', color: '#34d399', align: 'center', alpha: p2 });
+      }
+    }
+
+    // =========================================================================
+    // LOOP DE ANIMACIÓN PRINCIPAL
+    // =========================================================================
+    function renderFrameAt(elapsedSec) {
+      const t = elapsedSec % TOTAL_DURATION;
+      drawBackground(t);
+
+      if (t < 4.5) renderScene1(t);
+      else if (t < 9.5) renderScene2(t - 4.5);
+      else if (t < 14.5) renderScene3(t - 9.5);
+      else if (t < 19.5) renderScene4(t - 14.5);
+      else if (t < 24.5) renderScene5(t - 19.5);
+      else renderScene6(t - 24.5);
+
+      // Barra de progreso sutil en la parte inferior de vista previa (oculta al exportar si se quiere, aquí útil)
+      if (!isExporting) {
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.fillRect(0, H - 6, W, 6);
+        ctx.fillStyle = '#6366f1';
+        ctx.fillRect(0, H - 6, (t / TOTAL_DURATION) * W, 6);
+      }
+    }
+
+    function loop(now) {
+      if (!isExporting) {
+        const elapsed = (now - startTime) / 1000;
+        renderFrameAt(elapsed);
+      }
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    // =========================================================================
+    // EXPORTADOR DIRECTO A VÍDEO (.MP4 / .WEBM) A 1920x1080 60 FPS
+    // =========================================================================
+    document.getElementById('btn-export').addEventListener('click', () => {
+      if (isExporting) return;
+      isExporting = true;
+
+      const statusBox = document.getElementById('export-status');
+      const pctEl = document.getElementById('export-pct');
+      const barEl = document.getElementById('export-bar');
+      const exportBtn = document.getElementById('btn-export');
+      statusBox.classList.remove('hidden');
+      exportBtn.disabled = true;
+      exportBtn.classList.add('opacity-50');
+
+      const stream = canvas.captureStream(60);
+      const mimeTypes = [
+        'video/mp4;codecs=avc1.42E01E',
+        'video/mp4',
+        'video/webm;codecs=vp9',
+        'video/webm'
+      ];
+      let chosenMime = '';
+      for (const m of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(m)) {
+          chosenMime = m;
+          break;
+        }
+      }
+      const ext = chosenMime.includes('mp4') ? 'mp4' : 'webm';
+      const recorder = new MediaRecorder(stream, {
+        mimeType: chosenMime || undefined,
+        videoBitsPerSecond: 12000000 // 12 Mbps Full HD nitidez
+      });
+
+      const chunks = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: chosenMime || 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `SchulFamilie_PlayStore_Promo_DE_1080p.${ext}`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+        isExporting = false;
+        statusBox.classList.add('hidden');
+        exportBtn.disabled = false;
+        exportBtn.classList.remove('opacity-50');
+        startTime = performance.now();
+      };
+
+      recorder.start();
+      const recStart = performance.now();
+
+      function recordStep(now) {
+        const elapsed = (now - recStart) / 1000;
+        const pct = Math.min(100, Math.round((elapsed / TOTAL_DURATION) * 100));
+        pctEl.textContent = pct + '%';
+        barEl.style.width = pct + '%';
+
+        if (elapsed >= TOTAL_DURATION) {
+          renderFrameAt(TOTAL_DURATION - 0.01);
+          setTimeout(() => recorder.stop(), 150);
+          return;
+        }
+        renderFrameAt(elapsed);
+        requestAnimationFrame(recordStep);
+      }
+      requestAnimationFrame(recordStep);
+    });
+  </script>
+</body>
+</html>
