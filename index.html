@@ -34,7 +34,7 @@
     body {
       -webkit-tap-highlight-color: transparent;
       user-select: none;
-      overscroll-behavior-y: none;
+      
     }
 
     /* Estilo limpio para navegación flotante compatible con barras inferiores */
@@ -936,76 +936,115 @@ function App() {
         </div>
       </header>
 
-      {/* CONTENIDO PRINCIPAL */}
-      <main className="max-w-5xl mx-auto px-3 pt-4">
-        {activeTab === 'today' && (
-          <TodayAndParentDashboard
+      {/* CONTENIDO PRINCIPAL: SI HAY UNA VISTA COMPLETA ABIERTA (RECAP, HORARIO, AJUSTES, +TIEMPO), OCULTA EL FONDO PARA QUE EL SCROLL SEA 100% NATIVO */}
+      <main className="max-w-5xl mx-auto px-3 pt-4 pb-8">
+        {recapWizardOpen ? (
+          <DailyRecapWizardModal
             appData={appData}
-            activeProfile={activeProfile}
-            currentStudent={currentStudent}
-            setParentSelectedStudent={setParentSelectedStudent}
-            openRecapForStudent={openRecapForStudent}
-            setScheduleModalOpen={setScheduleModalOpen}
-            setActiveTab={setActiveTab}
-            setQuickTimeModal={setQuickTimeModal}
-            getExamUrgencyInfo={getExamUrgencyInfo}
-            setAppData={setAppData}
-            showToast={showToast}
-            rateSubtopicRecall={rateSubtopicRecall}
-          />
-        )}
-
-        {activeTab === 'topics' && (
-          <TopicsAndTasksView
-            appData={appData}
-            currentStudent={currentStudent}
-            setAppData={setAppData}
+            studentId={recapStudentId}
+            initialDate={recapInitialDate}
+            initialPeriodIdx={recapInitialPeriod}
+            initialSubjectId={recapInitialSubjectId}
+            onClose={() => setRecapWizardOpen(false)}
             upsertTopicAndSubtopic={upsertTopicAndSubtopic}
-            setQuickTimeModal={setQuickTimeModal}
-            showToast={showToast}
-            openRecapForStudent={openRecapForStudent}
+            recordClassSessionOnly={recordClassSessionOnly}
           />
-        )}
-
-        {activeTab === 'recall' && (
-          <ActiveRecallParentView
-            appData={appData}
-            activeProfile={activeProfile}
-            currentStudent={currentStudent}
-            setParentSelectedStudent={setParentSelectedStudent}
-            rateSubtopicRecall={rateSubtopicRecall}
-            getExamUrgencyInfo={getExamUrgencyInfo}
-          />
-        )}
-
-        {(activeTab === 'calendar' || activeTab === 'exams') && (
-          <ExamsAndGermanGradesView
-            key={activeTab}
-            initialViewMode={activeTab === 'calendar' ? 'calendar' : 'list'}
-            appData={appData}
-            activeProfile={activeProfile}
-            currentStudent={currentStudent}
-            setAppData={setAppData}
-            getExamUrgencyInfo={getExamUrgencyInfo}
-            showToast={showToast}
-            setActiveTab={setActiveTab}
-            openRecapForStudent={openRecapForStudent}
-            rateSubtopicRecall={rateSubtopicRecall}
-          />
-        )}
-
-        {activeTab === 'stats' && (
-          <StatsAndP2PSyncView
+        ) : scheduleModalOpen ? (
+          <ScheduleConfigModal
             appData={appData}
             currentStudent={currentStudent}
             setAppData={setAppData}
+            onClose={() => setScheduleModalOpen(false)}
             showToast={showToast}
           />
+        ) : editProfileModal ? (
+          <EditProfilesAndSubjectsModal
+            appData={appData}
+            setAppData={setAppData}
+            onClose={() => setEditProfileModal(false)}
+            showToast={showToast}
+          />
+        ) : quickTimeModal ? (
+          <QuickAddTimeModal
+            target={quickTimeModal}
+            onClose={() => setQuickTimeModal(null)}
+            onSave={(payload) => {
+              addWorkLog(payload);
+              setQuickTimeModal(null);
+            }}
+          />
+        ) : (
+          <>
+            {activeTab === 'today' && (
+              <TodayAndParentDashboard
+                appData={appData}
+                activeProfile={activeProfile}
+                currentStudent={currentStudent}
+                setParentSelectedStudent={setParentSelectedStudent}
+                openRecapForStudent={openRecapForStudent}
+                setScheduleModalOpen={setScheduleModalOpen}
+                setActiveTab={setActiveTab}
+                setQuickTimeModal={setQuickTimeModal}
+                getExamUrgencyInfo={getExamUrgencyInfo}
+                setAppData={setAppData}
+                showToast={showToast}
+                rateSubtopicRecall={rateSubtopicRecall}
+              />
+            )}
+
+            {activeTab === 'topics' && (
+              <TopicsAndTasksView
+                appData={appData}
+                currentStudent={currentStudent}
+                setAppData={setAppData}
+                upsertTopicAndSubtopic={upsertTopicAndSubtopic}
+                setQuickTimeModal={setQuickTimeModal}
+                showToast={showToast}
+                openRecapForStudent={openRecapForStudent}
+              />
+            )}
+
+            {activeTab === 'recall' && (
+              <ActiveRecallParentView
+                appData={appData}
+                activeProfile={activeProfile}
+                currentStudent={currentStudent}
+                setParentSelectedStudent={setParentSelectedStudent}
+                rateSubtopicRecall={rateSubtopicRecall}
+                getExamUrgencyInfo={getExamUrgencyInfo}
+              />
+            )}
+
+            {(activeTab === 'calendar' || activeTab === 'exams') && (
+              <ExamsAndGermanGradesView
+                key={activeTab}
+                initialViewMode={activeTab === 'calendar' ? 'calendar' : 'list'}
+                appData={appData}
+                activeProfile={activeProfile}
+                currentStudent={currentStudent}
+                setAppData={setAppData}
+                getExamUrgencyInfo={getExamUrgencyInfo}
+                showToast={showToast}
+                setActiveTab={setActiveTab}
+                openRecapForStudent={openRecapForStudent}
+                rateSubtopicRecall={rateSubtopicRecall}
+              />
+            )}
+
+            {activeTab === 'stats' && (
+              <StatsAndP2PSyncView
+                appData={appData}
+                currentStudent={currentStudent}
+                setAppData={setAppData}
+                showToast={showToast}
+              />
+            )}
+          </>
         )}
       </main>
 
-      {/* BARRA DE NAVEGACIÓN INFERIOR NATIVA ANDROID (CON PESTAÑA DIRECTA DE CALENDARIO) */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+      {/* BARRA DE NAVEGACIÓN INFERIOR NATIVA ANDROID */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 shadow-2xl" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         <div className="max-w-5xl mx-auto grid grid-cols-6">
           {[
             { id: 'today',    label: 'Hoy',        icon: Sparkles },
@@ -1016,11 +1055,18 @@ function App() {
             { id: 'stats',    label: 'Stats/P2P',  icon: RefreshCw },
           ].map((item) => {
             const Icon = item.icon;
-            const isActive = activeTab === item.id;
+            const isActive = activeTab === item.id && !recapWizardOpen && !scheduleModalOpen && !editProfileModal && !quickTimeModal;
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => {
+                  setRecapWizardOpen(false);
+                  setScheduleModalOpen(false);
+                  setEditProfileModal(false);
+                  setQuickTimeModal(null);
+                  setActiveTab(item.id);
+                  window.scrollTo(0, 0);
+                }}
                 className={`flex flex-col items-center justify-center py-2 px-1 transition-all active:scale-95 ${
                   isActive ? 'text-indigo-600 font-bold' : 'text-slate-500 hover:text-slate-800 font-medium'
                 }`}
@@ -1042,53 +1088,6 @@ function App() {
           })}
         </div>
       </nav>
-
-      {/* MODAL CONFIGURADOR DE HORARIO SEMANAL EDITABLE INDIVIDUALMENTE */}
-      {scheduleModalOpen && (
-        <ScheduleConfigModal
-          appData={appData}
-          currentStudent={currentStudent}
-          setAppData={setAppData}
-          onClose={() => setScheduleModalOpen(false)}
-          showToast={showToast}
-        />
-      )}
-
-      {/* MODAL AJUSTES DE PERFILES, CURSOS Y ASIGNATURAS */}
-      {editProfileModal && (
-        <EditProfilesAndSubjectsModal
-          appData={appData}
-          setAppData={setAppData}
-          onClose={() => setEditProfileModal(false)}
-          showToast={showToast}
-        />
-      )}
-
-      {/* MODAL RECAP */}
-      {recapWizardOpen && (
-        <DailyRecapWizardModal
-          appData={appData}
-          studentId={recapStudentId}
-          initialDate={recapInitialDate}
-          initialPeriodIdx={recapInitialPeriod}
-          initialSubjectId={recapInitialSubjectId}
-          onClose={() => setRecapWizardOpen(false)}
-          upsertTopicAndSubtopic={upsertTopicAndSubtopic}
-          recordClassSessionOnly={recordClassSessionOnly}
-        />
-      )}
-
-      {/* MODAL AÑADIR TIEMPO */}
-      {quickTimeModal && (
-        <QuickAddTimeModal
-          target={quickTimeModal}
-          onClose={() => setQuickTimeModal(null)}
-          onSave={(payload) => {
-            addWorkLog(payload);
-            setQuickTimeModal(null);
-          }}
-        />
-      )}
 
       {/* TOAST FLOTANTE */}
       {toastMessage && (
@@ -1150,21 +1149,23 @@ function ScheduleConfigModal({ appData, currentStudent, setAppData, onClose, sho
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-          <div>
-            <span className="text-[10px] uppercase font-bold text-indigo-300">
-              📅 Stundenplan (Horario Escolar)
-            </span>
-            <h3 className="font-bold text-base">Configurar Clases de la Semana</h3>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-800 text-slate-300">
-            <X className="w-5 h-5" />
-          </button>
+    <div className="bg-white w-full rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+      <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+        <div>
+          <span className="text-[10px] uppercase font-bold text-indigo-300">
+            📅 Stundenplan (Horario Escolar)
+          </span>
+          <h3 className="font-bold text-base">Configurar Clases de la Semana</h3>
         </div>
+        <button
+          onClick={onClose}
+          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold flex items-center gap-1"
+        >
+          ← Volver
+        </button>
+      </div>
 
-        <div className="p-4 space-y-4 overflow-y-auto">
+      <div className="p-4 space-y-4">
           {/* SELECTOR DE ALUMNO: ENRIQUE O FERNANDO */}
           <div>
             <label className="block text-xs font-extrabold uppercase text-slate-500 mb-1.5">
@@ -1228,7 +1229,7 @@ function ScheduleConfigModal({ appData, currentStudent, setAppData, onClose, sho
                 No hay asignaturas añadidas este día. Pulsa en las asignaturas de abajo para agregarlas.
               </div>
             ) : (
-              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+              <div className="space-y-1.5">
                 {dayScheduleIds.map((subId, idx) => {
                   const subj = appData.subjects.find((s) => s.id === subId);
                   return (
@@ -1288,10 +1289,9 @@ function ScheduleConfigModal({ appData, currentStudent, setAppData, onClose, sho
             }}
             className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow"
           >
-            Listo / Guardar
+            ← Volver y Guardar
           </button>
         </div>
-      </div>
     </div>
   );
 }
@@ -1352,19 +1352,21 @@ function EditProfilesAndSubjectsModal({ appData, setAppData, onClose, showToast 
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-          <div>
-            <span className="text-[10px] uppercase font-bold text-amber-400">⚙️ Cursos &amp; Asignaturas</span>
-            <h3 className="font-bold text-base">Adaptar para Nuevos Cursos</h3>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-slate-800 text-slate-300">
-            <X className="w-5 h-5" />
-          </button>
+    <div className="bg-white w-full rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+      <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+        <div>
+          <span className="text-[10px] uppercase font-bold text-amber-400">⚙️ Cursos &amp; Asignaturas</span>
+          <h3 className="font-bold text-base">Adaptar para Nuevos Cursos</h3>
         </div>
+        <button
+          onClick={onClose}
+          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold"
+        >
+          ← Volver
+        </button>
+      </div>
 
-        <div className="p-4 space-y-4 overflow-y-auto">
+      <div className="p-4 space-y-4">
           {/* HIJO 1: ENRIQUE */}
           <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
             <div className="text-xs font-bold text-indigo-700 flex items-center gap-1">
@@ -1455,7 +1457,7 @@ function EditProfilesAndSubjectsModal({ appData, setAppData, onClose, showToast 
             <div className="text-xs font-bold text-slate-600 mb-2">
               ✏️ Editar o borrar asignaturas existentes:
             </div>
-            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+            <div className="space-y-1.5">
               {appData.subjects.map((subj) => {
                 const owner = appData.students.find((s) => s.id === subj.student_id);
                 return (
@@ -1528,11 +1530,10 @@ function EditProfilesAndSubjectsModal({ appData, setAppData, onClose, showToast 
             🔄 Refrescar App (sin borrar datos)
           </button>
           <div className="flex items-center gap-2">
-            <button onClick={onClose} className="px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold">Cancelar</button>
+            <button onClick={onClose} className="px-3 py-2.5 rounded-xl border border-slate-300 text-xs font-bold">← Volver</button>
             <button onClick={saveProfiles} className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow">Guardar Cambios</button>
           </div>
         </div>
-      </div>
     </div>
   );
 }
@@ -1620,6 +1621,22 @@ function TodayAndParentDashboard({
   );
 
   const curStats = getStudentQuickStats(currentStudent.id);
+
+  if (inspectorModal) {
+    return (
+      <QuickDetailInspectorModal
+        appData={appData}
+        inspector={inspectorModal}
+        onClose={() => {
+          setInspectorModal(null);
+          window.scrollTo(0, 0);
+        }}
+        rateSubtopicRecall={rateSubtopicRecall}
+        openRecapForStudent={openRecapForStudent}
+        setActiveTab={setActiveTab}
+      />
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -1999,17 +2016,6 @@ function TodayAndParentDashboard({
         </div>
       )}
 
-      {/* MODAL INSPECTOR EMERGENTE AL PICAR EN CUALQUIER ELEMENTO (RECALL, FLOJOS, HORAS, PARTICIPACIÓN) */}
-      {inspectorModal && (
-        <QuickDetailInspectorModal
-          appData={appData}
-          inspector={inspectorModal}
-          onClose={() => setInspectorModal(null)}
-          rateSubtopicRecall={rateSubtopicRecall}
-          openRecapForStudent={openRecapForStudent}
-          setActiveTab={setActiveTab}
-        />
-      )}
     </div>
   );
 }
@@ -2063,21 +2069,23 @@ function QuickDetailInspectorModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold uppercase text-amber-400">
-              🔍 Detalle Completo • {stu.avatar} {stu.name}
-            </span>
-            <h3 className="font-bold text-sm">{title}</h3>
-          </div>
-          <button onClick={onClose} className="p-1 rounded-lg bg-slate-800 text-slate-300">
-            <X className="w-5 h-5" />
-          </button>
+    <div className="bg-white w-full rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+      <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+        <div>
+          <span className="text-[10px] font-bold uppercase text-amber-400">
+            🔍 Vista Completa • {stu.avatar} {stu.name}
+          </span>
+          <h3 className="font-bold text-base">{title}</h3>
         </div>
+        <button
+          onClick={onClose}
+          className="px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-black shadow"
+        >
+          ← Volver a Hoy
+        </button>
+      </div>
 
-        <div className="p-4 space-y-3 overflow-y-auto">
+      <div className="p-4 space-y-3">
           {selectedSub ? (
             <div className="p-4 rounded-2xl bg-amber-50/70 border-2 border-amber-400 space-y-3">
               <div className="flex items-center justify-between">
@@ -2258,12 +2266,11 @@ function QuickDetailInspectorModal({
           )}
         </div>
 
-        <div className="p-3 border-t border-slate-200 bg-slate-50 flex justify-end">
-          <button onClick={onClose} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">
-            Cerrar
+        <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-start">
+          <button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold">
+            ← Volver a Hoy
           </button>
         </div>
-      </div>
     </div>
   );
 }
@@ -2476,6 +2483,204 @@ function TopicsAndTasksView({
       ),
     }));
   };
+
+  if (editingSubject) {
+    return (
+      <div className="bg-white w-full rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+          <h3 className="font-bold text-base">
+            {editingSubject.id === 'NEW' ? '➕ Nueva Asignatura' : '✏️ Editar Asignatura'}
+          </h3>
+          <button
+            onClick={() => setEditingSubject(null)}
+            className="px-3 py-1.5 rounded-xl bg-slate-800 text-white text-xs font-bold"
+          >
+            ← Volver a Temas
+          </button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="grid grid-cols-4 gap-2">
+            <div>
+              <label className="block text-xs font-bold text-slate-600 mb-1">Icono:</label>
+              <input
+                type="text"
+                value={editingSubject.icon}
+                onChange={(e) => setEditingSubject({ ...editingSubject, icon: e.target.value })}
+                className="w-full rounded-xl border border-slate-300 p-2.5 text-center text-base"
+              />
+            </div>
+            <div className="col-span-3">
+              <label className="block text-xs font-bold text-slate-600 mb-1">
+                Nombre de la Asignatura:
+              </label>
+              <input
+                type="text"
+                value={editingSubject.name}
+                onChange={(e) => setEditingSubject({ ...editingSubject, name: e.target.value })}
+                placeholder="Ej. Mathematik, Physik..."
+                className="w-full rounded-xl border border-slate-300 p-2.5 text-sm font-bold"
+              />
+            </div>
+          </div>
+          <div className="flex justify-between pt-2">
+            <button
+              onClick={() => setEditingSubject(null)}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+            >
+              ← Volver
+            </button>
+            <button
+              onClick={handleSaveSubject}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow"
+            >
+              Guardar Asignatura
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (editingTopic) {
+    return (
+      <div className="bg-white w-full rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+          <h3 className="font-bold text-base">
+            {editingTopic.id === 'NEW' ? '📂 Nuevo Tema Principal' : '✏️ Editar Tema Principal'}
+          </h3>
+          <button
+            onClick={() => setEditingTopic(null)}
+            className="px-3 py-1.5 rounded-xl bg-slate-800 text-white text-xs font-bold"
+          >
+            ← Volver a Temas
+          </button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">Asignatura:</label>
+            <select
+              value={editingTopic.subject_id}
+              onChange={(e) => setEditingTopic({ ...editingTopic, subject_id: e.target.value })}
+              className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-bold"
+            >
+              {studentSubjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.icon} {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Título del Tema Principal:
+            </label>
+            <input
+              type="text"
+              value={editingTopic.title}
+              onChange={(e) => setEditingTopic({ ...editingTopic, title: e.target.value })}
+              placeholder="Ej. Bruchrechnung (Fracciones)"
+              className="w-full rounded-xl border border-slate-300 p-2.5 text-sm font-bold"
+            />
+          </div>
+          <div className="flex justify-between pt-2">
+            <button
+              onClick={() => setEditingTopic(null)}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+            >
+              ← Volver
+            </button>
+            <button
+              onClick={handleSaveTopic}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow"
+            >
+              Guardar Tema
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (editingSubtopic) {
+    return (
+      <div className="bg-white w-full rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+          <h3 className="font-bold text-base">
+            {editingSubtopic.id === 'NEW'
+              ? '➕ Añadir Subtema y Descripción'
+              : '✏️ Editar Subtema y Descripción'}
+          </h3>
+          <button
+            onClick={() => setEditingSubtopic(null)}
+            className="px-3 py-1.5 rounded-xl bg-slate-800 text-white text-xs font-bold"
+          >
+            ← Volver a Temas
+          </button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Título del Subtema (Nivel 2):
+            </label>
+            <input
+              type="text"
+              value={editingSubtopic.title}
+              onChange={(e) => setEditingSubtopic({ ...editingSubtopic, title: e.target.value })}
+              placeholder="Ej. Suma de fracciones con distinto denominador"
+              className="w-full rounded-xl border border-slate-300 p-2.5 text-sm font-bold"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Nivel de comprensión actual:
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {COMPREHENSION_LEVELS.map((lvl) => (
+                <button
+                  key={lvl.id}
+                  type="button"
+                  onClick={() => setEditingSubtopic({ ...editingSubtopic, comprehension: lvl.id })}
+                  className={`p-2.5 rounded-xl border text-xs font-bold text-left ${
+                    Number(editingSubtopic.comprehension) === lvl.id
+                      ? 'ring-2 ring-indigo-600 bg-indigo-50 border-indigo-500'
+                      : 'bg-slate-50 border-slate-200'
+                  }`}
+                >
+                  {lvl.emoji} {lvl.short}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              📝 Descripción / Explicación / Fórmulas (Nivel 3):
+            </label>
+            <textarea
+              value={editingSubtopic.notes}
+              onChange={(e) => setEditingSubtopic({ ...editingSubtopic, notes: e.target.value })}
+              rows={5}
+              placeholder="Apuntes, explicación del profesor, trucos o ejemplos..."
+              className="w-full rounded-xl border border-slate-300 p-3 text-xs"
+            />
+          </div>
+          <div className="flex justify-between pt-2">
+            <button
+              onClick={() => setEditingSubtopic(null)}
+              className="px-4 py-2.5 rounded-xl border border-slate-300 text-xs font-bold"
+            >
+              ← Volver
+            </button>
+            <button
+              onClick={handleSaveSubtopic}
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow"
+            >
+              Guardar Subtema
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -2972,209 +3177,6 @@ function TopicsAndTasksView({
         </div>
       )}
 
-      {/* MODAL EDITAR / CREAR ASIGNATURA */}
-      {editingSubject && (
-        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-sm">
-                {editingSubject.id === 'NEW' ? '➕ Nueva Asignatura' : '✏️ Editar Asignatura'}
-              </h3>
-              <button onClick={() => setEditingSubject(null)} className="text-slate-400">
-                ✕
-              </button>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">Icono:</label>
-                <input
-                  type="text"
-                  value={editingSubject.icon}
-                  onChange={(e) =>
-                    setEditingSubject({ ...editingSubject, icon: e.target.value })
-                  }
-                  className="w-full rounded-xl border border-slate-300 p-2 text-center text-base"
-                />
-              </div>
-              <div className="col-span-3">
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                  Nombre de la Asignatura:
-                </label>
-                <input
-                  type="text"
-                  value={editingSubject.name}
-                  onChange={(e) =>
-                    setEditingSubject({ ...editingSubject, name: e.target.value })
-                  }
-                  placeholder="Ej. Mathematik, Physik..."
-                  className="w-full rounded-xl border border-slate-300 p-2 text-xs font-bold"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setEditingSubject(null)}
-                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSaveSubject}
-                className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow"
-              >
-                Guardar Asignatura
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL EDITAR / CREAR TEMA PRINCIPAL (NIVEL 1) */}
-      {editingTopic && (
-        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-sm">
-                {editingTopic.id === 'NEW' ? '📂 Nuevo Tema Principal' : '✏️ Editar Tema Principal'}
-              </h3>
-              <button onClick={() => setEditingTopic(null)} className="text-slate-400">
-                ✕
-              </button>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Asignatura:</label>
-              <select
-                value={editingTopic.subject_id}
-                onChange={(e) =>
-                  setEditingTopic({ ...editingTopic, subject_id: e.target.value })
-                }
-                className="w-full rounded-xl border border-slate-300 p-2 text-xs font-bold"
-              >
-                {studentSubjects.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.icon} {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Título del Tema Principal:
-              </label>
-              <input
-                type="text"
-                value={editingTopic.title}
-                onChange={(e) =>
-                  setEditingTopic({ ...editingTopic, title: e.target.value })
-                }
-                placeholder="Ej. Bruchrechnung (Fracciones)"
-                className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-bold"
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setEditingTopic(null)}
-                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSaveTopic}
-                className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow"
-              >
-                Guardar Tema
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL EDITAR / CREAR SUBTEMA Y DESCRIPCIÓN (NIVELES 2 Y 3) */}
-      {editingSubtopic && (
-        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-sm">
-                {editingSubtopic.id === 'NEW'
-                  ? '➕ Añadir Subtema y Descripción'
-                  : '✏️ Editar Subtema y Descripción'}
-              </h3>
-              <button onClick={() => setEditingSubtopic(null)} className="text-slate-400">
-                ✕
-              </button>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Título del Subtema (Nivel 2):
-              </label>
-              <input
-                type="text"
-                value={editingSubtopic.title}
-                onChange={(e) =>
-                  setEditingSubtopic({ ...editingSubtopic, title: e.target.value })
-                }
-                placeholder="Ej. Suma de fracciones con distinto denominador"
-                className="w-full rounded-xl border border-slate-300 p-2 text-xs font-bold"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                Nivel de comprensión actual:
-              </label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {COMPREHENSION_LEVELS.map((lvl) => (
-                  <button
-                    key={lvl.id}
-                    type="button"
-                    onClick={() =>
-                      setEditingSubtopic({ ...editingSubtopic, comprehension: lvl.id })
-                    }
-                    className={`p-2 rounded-xl border text-xs font-bold text-left ${
-                      Number(editingSubtopic.comprehension) === lvl.id
-                        ? 'ring-2 ring-indigo-600 bg-indigo-50 border-indigo-500'
-                        : 'bg-slate-50 border-slate-200'
-                    }`}
-                  >
-                    {lvl.emoji} {lvl.short}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                📝 Descripción / Explicación / Fórmulas (Nivel 3):
-              </label>
-              <textarea
-                value={editingSubtopic.notes}
-                onChange={(e) =>
-                  setEditingSubtopic({ ...editingSubtopic, notes: e.target.value })
-                }
-                rows={4}
-                placeholder="Apuntes, explicación del profesor, trucos o ejemplos..."
-                className="w-full rounded-xl border border-slate-300 p-2.5 text-xs"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setEditingSubtopic(null)}
-                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSaveSubtopic}
-                className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow"
-              >
-                Guardar Subtema
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -3625,6 +3627,320 @@ function ExamsAndGermanGradesView({
     showToast('🗑️ Examen eliminado');
   };
 
+  if (createExamModalDate) {
+    return (
+      <CreateExamModal
+        appData={appData}
+        activeProfile={activeProfile}
+        currentStudent={currentStudent}
+        initialDate={createExamModalDate}
+        onClose={() => {
+          setCreateExamModalDate(null);
+          window.scrollTo(0, 0);
+        }}
+        onSave={(newExam) => {
+          setAppData((prev) => ({
+            ...prev,
+            lastUpdated: Date.now(),
+            exams: [newExam, ...prev.exams],
+          }));
+          setSelectedDate(newExam.exam_date);
+          setCreateExamModalDate(null);
+          window.scrollTo(0, 0);
+          showToast('🎓 Examen añadido al calendario');
+        }}
+      />
+    );
+  }
+
+  if (gradingExamId) {
+    return (
+      <GermanGradePickerModal
+        exam={appData.exams.find((e) => e.id === gradingExamId)}
+        onClose={() => {
+          setGradingExamId(null);
+          window.scrollTo(0, 0);
+        }}
+        onSave={({ grade_label, grade_value, post_exam_feeling, post_exam_comment }) => {
+          setAppData((prev) => ({
+            ...prev,
+            lastUpdated: Date.now(),
+            exams: prev.exams.map((e) =>
+              e.id === gradingExamId
+                ? {
+                    ...e,
+                    grade_label,
+                    grade_value,
+                    post_exam_feeling,
+                    post_exam_comment,
+                    updated_at: Date.now(),
+                  }
+                : e
+            ),
+          }));
+          setGradingExamId(null);
+          window.scrollTo(0, 0);
+          showToast(`🏅 Nota ${grade_label} guardada`);
+        }}
+      />
+    );
+  }
+
+  // PÁGINA COMPLETA DEL DÍA SELECCIONADO (SIN CALENDARIO DETRÁS, SCROLL 100% FLUIDO)
+  if (dayPopupOpen) {
+    return (
+      <div className="bg-white w-full rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+        <div className="p-4 bg-slate-900 text-white flex items-center justify-between gap-2">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
+              📅 Vista Completa del Día
+            </span>
+            <h3 className="font-extrabold text-base">
+              {getFullDayNameEs(selectedDate)} ({formatHumanDate(selectedDate)})
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setDayPopupOpen(false);
+              window.scrollTo(0, 0);
+            }}
+            className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black shadow shrink-0"
+          >
+            ← Volver al Mes
+          </button>
+        </div>
+
+        <div className="p-4 space-y-5">
+          {/* Acciones rápidas para esta fecha */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDayPopupOpen(false);
+                openRecapForStudent && openRecapForStudent(currentStudent.id, selectedDate, 0, null);
+              }}
+              className="py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>✨ Hacer / Editar Recap de este día</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDayPopupOpen(false);
+                setCreateExamModalDate(selectedDate);
+              }}
+              className="py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow"
+            >
+              <Plus className="w-4 h-4" />
+              <span>🎓 Añadir Examen en este día</span>
+            </button>
+          </div>
+
+          {/* 1. ACTIVE RECALL DE ESTE DÍA */}
+          <div className="space-y-2.5">
+            <div className="text-xs font-extrabold uppercase text-amber-900 bg-amber-100/70 px-3 py-1.5 rounded-lg">
+              ⚡ Active Recall programados en esta fecha ({selectedDayRecalls.length})
+            </div>
+            {selectedDayRecalls.length === 0 ? (
+              <p className="text-xs text-slate-400 italic px-1">
+                Ningún Active Recall programado para este día.
+              </p>
+            ) : (
+              selectedDayRecalls.map((rc) => {
+                const comp = COMPREHENSION_LEVELS.find((c) => c.id === rc.comprehension);
+                return (
+                  <div key={rc.id} className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-300 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-indigo-700">
+                        {rc.student_avatar} {rc.student_name} • {rc.subject_icon} {rc.subject_name} • 📂 {rc.topic_title}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${comp?.badgeClass}`}>
+                        {comp?.emoji} {comp?.short}
+                      </span>
+                    </div>
+                    <div className="font-black text-base text-slate-900">
+                      ⚡ "{rc.title}"
+                    </div>
+                    <div className="p-3 rounded-xl bg-white border border-amber-200 text-xs text-slate-800">
+                      <div className="font-bold text-amber-900 mb-0.5">📝 Descripción / Explicación:</div>
+                      <p className="whitespace-pre-wrap">{rc.notes || 'Sin descripción adicional.'}</p>
+                    </div>
+                    {rateSubtopicRecall && (
+                      <div className="pt-1">
+                        <div className="text-[10px] font-bold uppercase text-slate-500 mb-1.5">
+                          Calificar repaso ahora mismo:
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                          {[
+                            { r: 1, emoji: '🔄', label: 'No supo (1d)', cls: 'bg-red-50 text-red-900 border-red-300' },
+                            { r: 2, emoji: '😓', label: 'Dudas (2-3d)', cls: 'bg-amber-100 text-amber-900 border-amber-300' },
+                            { r: 3, emoji: '👍', label: 'Bien (4-5d)', cls: 'bg-emerald-50 text-emerald-900 border-emerald-300' },
+                            { r: 4, emoji: '🚀', label: 'Perfecto (7d+)', cls: 'bg-indigo-50 text-indigo-900 border-indigo-300' },
+                          ].map((btn) => (
+                            <button
+                              key={btn.r}
+                              type="button"
+                              onClick={() =>
+                                rateSubtopicRecall({
+                                  student_id: rc.student_id,
+                                  topic_id: rc.topic_id,
+                                  subtopic_id: rc.id,
+                                  rating: btn.r,
+                                  minutesSpent: 10,
+                                })
+                              }
+                              className={`py-2 px-2 rounded-xl border text-xs font-bold ${btn.cls}`}
+                            >
+                              {btn.emoji} {btn.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* 2. EXÁMENES DE ESTE DÍA */}
+          <div className="space-y-2.5 pt-2 border-t border-slate-100">
+            <div className="text-xs font-extrabold uppercase text-indigo-900 bg-indigo-50 px-3 py-1.5 rounded-lg">
+              🎓 Exámenes en esta fecha ({selectedDayExams.length})
+            </div>
+            {selectedDayExams.length === 0 ? (
+              <p className="text-xs text-slate-400 italic px-1">No hay exámenes este día.</p>
+            ) : (
+              selectedDayExams.map((ex) => {
+                const subj = appData.subjects.find((s) => s.id === ex.subject_id);
+                const stu = appData.students.find((s) => s.id === ex.student_id);
+                const allSubs = appData.topics
+                  .filter((t) => t.student_id === ex.student_id)
+                  .flatMap((t) => t.subtopics.map((st) => ({ ...st, topicTitle: t.title })));
+                const exSubs = allSubs.filter((st) => (ex.subtopic_ids || []).includes(st.id));
+
+                return (
+                  <div key={ex.id} className="p-3.5 rounded-xl bg-indigo-50/60 border border-indigo-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-indigo-700">
+                        {stu?.avatar} {stu?.name} • {subj?.icon} {subj?.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDayPopupOpen(false);
+                          setGradingExamId(ex.id);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs shadow-2xs"
+                      >
+                        {ex.grade_label ? `Nota: ${ex.grade_label}` : '🏅 Poner Nota (1+ a 6)'}
+                      </button>
+                    </div>
+                    <div className="font-black text-base text-slate-900">{ex.title}</div>
+                    {exSubs.length > 0 && (
+                      <div className="space-y-1.5 pt-1">
+                        <div className="text-[10px] font-bold text-slate-500 uppercase">Temas y subtemas que entran:</div>
+                        {exSubs.map((st) => (
+                          <div key={st.id} className="p-2.5 rounded-xl bg-white border border-slate-200 text-xs">
+                            <div className="font-bold text-slate-800">📂 {st.topicTitle} ➔ 📄 {st.title}</div>
+                            {st.notes && <div className="text-[11px] text-slate-600 mt-1">📝 {st.notes}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* 3. RECAPS / CLASES DE ESTE DÍA */}
+          <div className="space-y-2.5 pt-2 border-t border-slate-100">
+            <div className="text-xs font-extrabold uppercase text-emerald-900 bg-emerald-50 px-3 py-1.5 rounded-lg">
+              📝 Clases y Recap registrados en esta fecha ({selectedDaySessions.length})
+            </div>
+            {selectedDaySessions.length === 0 ? (
+              <p className="text-xs text-slate-400 italic px-1">No hay clases registradas este día.</p>
+            ) : (
+              selectedDaySessions.map((sess) => {
+                const subj = appData.subjects.find((s) => s.id === sess.subject_id);
+                const stu = appData.students.find((s) => s.id === sess.student_id);
+                const pObj = PARTICIPATION_LEVELS.find((p) => p.id === String(sess.participation));
+                return (
+                  <div key={sess.id} className="p-3.5 rounded-xl bg-emerald-50/50 border border-emerald-200 flex items-center justify-between gap-2">
+                    <div className="space-y-1 min-w-0">
+                      <div className="text-xs font-bold text-slate-900">
+                        {(sess.period_idx || 0) + 1}ª hora • {stu?.avatar} {subj?.icon} {subj?.name}
+                      </div>
+                      {sess.status === 'normal' ? (
+                        <div className="text-xs text-indigo-900 font-semibold">
+                          📂 {sess.topic_title} ➔ 📄 {sess.subtopic_title}
+                        </div>
+                      ) : (
+                        <div className="text-xs font-bold text-amber-800">
+                          {sess.status === 'vertretung' ? '🔄 Vertretung' : '🚫 Entfall'}
+                        </div>
+                      )}
+                      {sess.note && <div className="text-[11px] text-slate-600 italic">📝 {sess.note}</div>}
+                      {pObj && pObj.id !== 'na' && (
+                        <div className="text-[11px] font-bold text-emerald-800">
+                          Participación: {pObj.emoji} {pObj.label} (Nota {pObj.id})
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDayPopupOpen(false);
+                        openRecapForStudent &&
+                          openRecapForStudent(sess.student_id, sess.date, sess.period_idx || 0, sess.subject_id);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-white border border-indigo-200 text-indigo-700 text-xs font-bold shrink-0"
+                    >
+                      ✏️ Editar
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* 4. DEBERES DE ESTE DÍA */}
+          {selectedDayTasks.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <div className="text-xs font-extrabold uppercase text-rose-900 bg-rose-50 px-3 py-1.5 rounded-lg">
+                📌 Deberes para este día ({selectedDayTasks.length})
+              </div>
+              {selectedDayTasks.map((tsk) => {
+                const subj = appData.subjects.find((s) => s.id === tsk.subject_id);
+                return (
+                  <div key={tsk.id} className="p-3 rounded-xl bg-rose-50/60 border border-rose-200 text-xs font-bold text-slate-800">
+                    📌 {subj?.icon} {subj?.name}: {tsk.title}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-start">
+          <button
+            type="button"
+            onClick={() => {
+              setDayPopupOpen(false);
+              window.scrollTo(0, 0);
+            }}
+            className="px-5 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-bold"
+          >
+            ← Volver al Calendario Mensual
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {/* CABECERA: NOTENDURCHSCHNITT + CONMUTADOR TABLA VS LISTA */}
@@ -3793,6 +4109,7 @@ function ExamsAndGermanGradesView({
                     onClick={() => {
                       setSelectedDate(cell.dateStr);
                       setDayPopupOpen(true);
+                      window.scrollTo(0, 0);
                     }}
                     className={`min-h-[74px] sm:min-h-[96px] p-1 sm:p-1.5 cursor-pointer transition flex flex-col justify-between relative ${
                       !cell.isCurrentMonth
@@ -4464,294 +4781,6 @@ function ExamsAndGermanGradesView({
         </div>
       )}
 
-      {/* MODAL EMERGENTE AL PICAR EN CUALQUIER DÍA O ICONO DEL CALENDARIO */}
-      {dayPopupOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full max-w-xl rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
-                  📅 Todo lo de este día
-                </span>
-                <h3 className="font-extrabold text-base">
-                  {getFullDayNameEs(selectedDate)} ({formatHumanDate(selectedDate)})
-                </h3>
-              </div>
-              <button
-                onClick={() => setDayPopupOpen(false)}
-                className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 space-y-4 overflow-y-auto">
-              {/* Acciones rápidas para esta fecha */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDayPopupOpen(false);
-                    openRecapForStudent && openRecapForStudent(currentStudent.id, selectedDate, 0, null);
-                  }}
-                  className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>✨ Hacer / Editar Recap</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDayPopupOpen(false);
-                    setCreateExamModalDate(selectedDate);
-                  }}
-                  className="py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>🎓 Añadir Examen</span>
-                </button>
-              </div>
-
-              {/* 1. ACTIVE RECALL DE ESTE DÍA */}
-              <div className="space-y-2">
-                <div className="text-xs font-extrabold uppercase text-amber-900">
-                  ⚡ Active Recall en esta fecha ({selectedDayRecalls.length}):
-                </div>
-                {selectedDayRecalls.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic">Ningún Active Recall programado para este día.</p>
-                ) : (
-                  selectedDayRecalls.map((rc) => {
-                    const comp = COMPREHENSION_LEVELS.find((c) => c.id === rc.comprehension);
-                    return (
-                      <div key={rc.id} className="p-3 rounded-xl bg-amber-50 border border-amber-300 space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[11px] font-bold text-indigo-700">
-                            {rc.student_avatar} {rc.student_name} • {rc.subject_icon} {rc.subject_name} • 📂 {rc.topic_title}
-                          </span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${comp?.badgeClass}`}>
-                            {comp?.emoji} {comp?.short}
-                          </span>
-                        </div>
-                        <div className="font-black text-sm text-slate-900">
-                          ⚡ "{rc.title}"
-                        </div>
-                        <div className="p-2 rounded-lg bg-white border border-amber-200 text-xs text-slate-700">
-                          <strong>📝 Descripción:</strong> {rc.notes || 'Sin descripción adicional.'}
-                        </div>
-                        {rateSubtopicRecall && (
-                          <div className="grid grid-cols-4 gap-1 pt-1">
-                            {[
-                              { r: 1, emoji: '🔄', label: 'No supo', cls: 'bg-red-50 text-red-900 border-red-300' },
-                              { r: 2, emoji: '😓', label: 'Dudas', cls: 'bg-amber-100 text-amber-900 border-amber-300' },
-                              { r: 3, emoji: '👍', label: 'Bien', cls: 'bg-emerald-50 text-emerald-900 border-emerald-300' },
-                              { r: 4, emoji: '🚀', label: 'Perfecto', cls: 'bg-indigo-50 text-indigo-900 border-indigo-300' },
-                            ].map((btn) => (
-                              <button
-                                key={btn.r}
-                                type="button"
-                                onClick={() =>
-                                  rateSubtopicRecall({
-                                    student_id: rc.student_id,
-                                    topic_id: rc.topic_id,
-                                    subtopic_id: rc.id,
-                                    rating: btn.r,
-                                    minutesSpent: 10,
-                                  })
-                                }
-                                className={`py-1.5 rounded-lg border text-[11px] font-bold ${btn.cls}`}
-                              >
-                                {btn.emoji} {btn.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* 2. EXÁMENES DE ESTE DÍA */}
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <div className="text-xs font-extrabold uppercase text-indigo-900">
-                  🎓 Exámenes en esta fecha ({selectedDayExams.length}):
-                </div>
-                {selectedDayExams.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic">No hay exámenes este día.</p>
-                ) : (
-                  selectedDayExams.map((ex) => {
-                    const subj = appData.subjects.find((s) => s.id === ex.subject_id);
-                    const stu = appData.students.find((s) => s.id === ex.student_id);
-                    const allSubs = appData.topics
-                      .filter((t) => t.student_id === ex.student_id)
-                      .flatMap((t) => t.subtopics.map((st) => ({ ...st, topicTitle: t.title })));
-                    const exSubs = allSubs.filter((st) => (ex.subtopic_ids || []).includes(st.id));
-
-                    return (
-                      <div key={ex.id} className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-200 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-indigo-700">
-                            {stu?.avatar} {stu?.name} • {subj?.icon} {subj?.name}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setDayPopupOpen(false);
-                              setGradingExamId(ex.id);
-                            }}
-                            className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs"
-                          >
-                            {ex.grade_label ? `Nota: ${ex.grade_label}` : '🏅 Poner Nota'}
-                          </button>
-                        </div>
-                        <div className="font-black text-sm text-slate-900">{ex.title}</div>
-                        {exSubs.length > 0 && (
-                          <div className="space-y-1 pt-1">
-                            <div className="text-[10px] font-bold text-slate-500 uppercase">Temas que entran:</div>
-                            {exSubs.map((st) => (
-                              <div key={st.id} className="p-2 rounded-lg bg-white border border-slate-200 text-xs">
-                                <div className="font-bold text-slate-800">📂 {st.topicTitle} ➔ 📄 {st.title}</div>
-                                {st.notes && <div className="text-[11px] text-slate-500 mt-0.5">📝 {st.notes}</div>}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* 3. RECAPS / CLASES DE ESTE DÍA */}
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <div className="text-xs font-extrabold uppercase text-emerald-900">
-                  📝 Clases y Recap registrados ({selectedDaySessions.length}):
-                </div>
-                {selectedDaySessions.length === 0 ? (
-                  <p className="text-xs text-slate-400 italic">No hay clases registradas este día.</p>
-                ) : (
-                  selectedDaySessions.map((sess) => {
-                    const subj = appData.subjects.find((s) => s.id === sess.subject_id);
-                    const stu = appData.students.find((s) => s.id === sess.student_id);
-                    const pObj = PARTICIPATION_LEVELS.find((p) => p.id === String(sess.participation));
-                    return (
-                      <div key={sess.id} className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-200 flex items-center justify-between gap-2">
-                        <div className="space-y-0.5 min-w-0">
-                          <div className="text-xs font-bold text-slate-900">
-                            {(sess.period_idx || 0) + 1}ª hora • {stu?.avatar} {subj?.icon} {subj?.name}
-                          </div>
-                          {sess.status === 'normal' ? (
-                            <div className="text-xs text-indigo-900 font-semibold">
-                              📂 {sess.topic_title} ➔ 📄 {sess.subtopic_title}
-                            </div>
-                          ) : (
-                            <div className="text-xs font-bold text-amber-800">
-                              {sess.status === 'vertretung' ? '🔄 Vertretung' : '🚫 Entfall'}
-                            </div>
-                          )}
-                          {sess.note && <div className="text-[11px] text-slate-600 italic">📝 {sess.note}</div>}
-                          {pObj && pObj.id !== 'na' && (
-                            <div className="text-[10px] font-bold text-emerald-800">
-                              Participación: {pObj.emoji} {pObj.label} (Nota {pObj.id})
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDayPopupOpen(false);
-                            openRecapForStudent &&
-                              openRecapForStudent(sess.student_id, sess.date, sess.period_idx || 0, sess.subject_id);
-                          }}
-                          className="px-2.5 py-1.5 rounded-lg bg-white border border-indigo-200 text-indigo-700 text-xs font-bold shrink-0"
-                        >
-                          ✏️ Editar
-                        </button>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* 4. DEBERES DE ESTE DÍA */}
-              {selectedDayTasks.length > 0 && (
-                <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                  <div className="text-xs font-extrabold uppercase text-rose-900">
-                    📌 Deberes para este día ({selectedDayTasks.length}):
-                  </div>
-                  {selectedDayTasks.map((tsk) => {
-                    const subj = appData.subjects.find((s) => s.id === tsk.subject_id);
-                    return (
-                      <div key={tsk.id} className="p-2.5 rounded-xl bg-rose-50/60 border border-rose-200 text-xs font-bold text-slate-800">
-                        📌 {subj?.icon} {subj?.name}: {tsk.title}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="p-3 border-t border-slate-200 bg-slate-50 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setDayPopupOpen(false)}
-                className="px-5 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL CREAR NUEVO EXAMEN (CON FECHA PRE-RELLENADA DEL CALENDARIO) */}
-      {createExamModalDate && (
-        <CreateExamModal
-          appData={appData}
-          activeProfile={activeProfile}
-          currentStudent={currentStudent}
-          initialDate={createExamModalDate}
-          onClose={() => setCreateExamModalDate(null)}
-          onSave={(newExam) => {
-            setAppData((prev) => ({
-              ...prev,
-              lastUpdated: Date.now(),
-              exams: [newExam, ...prev.exams],
-            }));
-            setSelectedDate(newExam.exam_date);
-            setCreateExamModalDate(null);
-            showToast('🎓 Examen añadido al calendario');
-          }}
-        />
-      )}
-
-      {/* MODAL CALIFICAR CON NOTA ALEMANA (1+ A 6) Y COMENTARIO POST-EXAMEN */}
-      {gradingExamId && (
-        <GermanGradePickerModal
-          exam={appData.exams.find((e) => e.id === gradingExamId)}
-          onClose={() => setGradingExamId(null)}
-          onSave={({ grade_label, grade_value, post_exam_feeling, post_exam_comment }) => {
-            setAppData((prev) => ({
-              ...prev,
-              lastUpdated: Date.now(),
-              exams: prev.exams.map((e) =>
-                e.id === gradingExamId
-                  ? {
-                      ...e,
-                      grade_label,
-                      grade_value,
-                      post_exam_feeling,
-                      post_exam_comment,
-                      updated_at: Date.now(),
-                    }
-                  : e
-              ),
-            }));
-            setGradingExamId(null);
-            showToast(`🏅 Nota ${grade_label} guardada`);
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -4810,23 +4839,24 @@ function CreateExamModal({ appData, activeProfile, currentStudent, initialDate, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3">
-      <div
-        className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
-      >
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-          <div>
-            <span className="text-[10px] uppercase font-bold text-indigo-300">
-              🗓️ Programar Examen en Calendario
-            </span>
-            <h3 className="font-bold text-sm">Nueva Klassenarbeit / Test</h3>
-          </div>
-          <button type="button" onClick={onClose}>
-            <X className="w-5 h-5 text-slate-400" />
-          </button>
+    <div className="bg-white w-full rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+      <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+        <div>
+          <span className="text-[10px] uppercase font-bold text-indigo-300">
+            🗓️ Programar Examen en Calendario
+          </span>
+          <h3 className="font-bold text-base">Nueva Klassenarbeit / Test</h3>
         </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-3 py-1.5 rounded-xl bg-slate-800 text-white text-xs font-bold"
+        >
+          ← Volver
+        </button>
+      </div>
 
-        <div className="p-4 space-y-3 overflow-y-auto">
+      <div className="p-4 space-y-4">
           {/* Selector de hijo */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">Alumno:</label>
@@ -4901,7 +4931,7 @@ function CreateExamModal({ appData, activeProfile, currentStudent, initialDate, 
                 Aún no hay subtemas registrados en esta asignatura.
               </p>
             ) : (
-              <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+              <div className="space-y-2">
                 {subjectTopics.map((topic) => (
                   <div
                     key={topic.id}
@@ -4945,7 +4975,6 @@ function CreateExamModal({ appData, activeProfile, currentStudent, initialDate, 
             Guardar en Calendario
           </button>
         </div>
-      </div>
     </div>
   );
 }
@@ -4962,21 +4991,23 @@ function GermanGradePickerModal({ exam, onClose, onSave }) {
     GERMAN_GRADES.find((g) => g.label === selectedLabel) || GERMAN_GRADES[4];
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-          <div>
-            <span className="text-[10px] uppercase font-bold text-amber-400">
-              🇩🇪 Calificación Oficial Alemana (Notensystem)
-            </span>
-            <h3 className="font-bold text-sm">{exam?.title}</h3>
-          </div>
-          <button onClick={onClose}>
-            <X className="w-5 h-5 text-slate-400" />
-          </button>
+    <div className="bg-white w-full rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+      <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+        <div>
+          <span className="text-[10px] uppercase font-bold text-amber-400">
+            🇩🇪 Calificación Oficial Alemana (Notensystem)
+          </span>
+          <h3 className="font-bold text-base">{exam?.title}</h3>
         </div>
+        <button
+          onClick={onClose}
+          className="px-3 py-1.5 rounded-xl bg-slate-800 text-white text-xs font-bold"
+        >
+          ← Volver
+        </button>
+      </div>
 
-        <div className="p-4 space-y-4 overflow-y-auto">
+      <div className="p-4 space-y-4">
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-slate-700">Selecciona la nota:</span>
@@ -5064,7 +5095,6 @@ function GermanGradePickerModal({ exam, onClose, onSave }) {
             Guardar Nota {currentGradeObj.label}
           </button>
         </div>
-      </div>
     </div>
   );
 }
@@ -5695,29 +5725,31 @@ function DailyRecapWizardModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-3">
-      <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[94vh] flex flex-col overflow-hidden">
-        {/* CABECERA CON DÍA Y FECHA BIEN VISIBLES */}
-        <div className="p-4 bg-slate-900 text-white space-y-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block">
-                📅 Haciendo Recap del: {getFullDayNameEs(recapDate)} ({formatHumanDate(recapDate)})
-              </span>
-              <h3 className="font-extrabold text-base mt-0.5">
-                {student.avatar} {student.name} •{' '}
-                {activeSubjectObj
-                  ? `${queueIdx + 1}ª Hora: ${activeSubjectObj.icon} ${activeSubjectObj.name}`
-                  : 'Recap'}
-              </h3>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
-            >
-              <X className="w-5 h-5" />
-            </button>
+    <div className="bg-white w-full rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+      {/* CABECERA CON DÍA Y FECHA BIEN VISIBLES Y BOTÓN VOLVER */}
+      <div className="p-4 bg-slate-900 text-white space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block">
+              📅 Haciendo Recap del: {getFullDayNameEs(recapDate)} ({formatHumanDate(recapDate)})
+            </span>
+            <h3 className="font-extrabold text-base mt-0.5">
+              {student.avatar} {student.name} •{' '}
+              {activeSubjectObj
+                ? `${queueIdx + 1}ª Hora: ${activeSubjectObj.icon} ${activeSubjectObj.name}`
+                : 'Recap'}
+            </h3>
           </div>
+          <button
+            onClick={() => {
+              onClose();
+              window.scrollTo(0, 0);
+            }}
+            className="px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-black shadow shrink-0"
+          >
+            ← Volver
+          </button>
+        </div>
 
           {/* SELECTOR DE FECHA (HOY / AYER / CUALQUIER DÍA PASADO) */}
           <div className="flex flex-wrap items-center justify-between gap-1.5 pt-2 border-t border-slate-800">
@@ -5758,7 +5790,7 @@ function DailyRecapWizardModal({
           </div>
         </div>
 
-        <div className="p-4 space-y-4 overflow-y-auto">
+        <div className="p-4 space-y-4">
           {/* Aviso si estamos editando una clase que ya fue registrada */}
           {existingSession && (
             <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-300 text-indigo-950 text-xs font-bold flex items-center justify-between">
@@ -6113,7 +6145,6 @@ function DailyRecapWizardModal({
               : '✓ Confirmar Tachado'}
           </button>
         </div>
-      </div>
     </div>
   );
 }
@@ -6129,12 +6160,13 @@ function QuickAddTimeModal({ target, onClose, onSave }) {
   const [note, setNote] = useState('');
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-sm rounded-2xl p-4 shadow-xl space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="font-bold text-sm truncate pr-2">⏱️ +Tiempo en {target.title}</h3>
-          <button onClick={onClose} className="text-slate-400">✕</button>
-        </div>
+    <div className="bg-white w-full max-w-lg mx-auto rounded-2xl p-5 shadow-md border border-slate-200 space-y-4">
+      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+        <h3 className="font-extrabold text-base truncate pr-2">⏱️ +Tiempo en {target.title}</h3>
+        <button onClick={onClose} className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold">
+          ← Volver
+        </button>
+      </div>
 
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1">Fecha del estudio:</label>
@@ -6206,7 +6238,6 @@ function QuickAddTimeModal({ target, onClose, onSave }) {
         >
           Guardar +{mins}m ({formatHumanDate(dateStr)})
         </button>
-      </div>
     </div>
   );
 }
