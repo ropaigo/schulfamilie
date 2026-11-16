@@ -951,6 +951,7 @@ function App() {
             getExamUrgencyInfo={getExamUrgencyInfo}
             setAppData={setAppData}
             showToast={showToast}
+            rateSubtopicRecall={rateSubtopicRecall}
           />
         )}
 
@@ -989,6 +990,7 @@ function App() {
             showToast={showToast}
             setActiveTab={setActiveTab}
             openRecapForStudent={openRecapForStudent}
+            rateSubtopicRecall={rateSubtopicRecall}
           />
         )}
 
@@ -1536,7 +1538,7 @@ function EditProfilesAndSubjectsModal({ appData, setAppData, onClose, showToast 
 }
 
 // ============================================================================
-// VISTA 1: HOY / RECAP DIARIO Y SUPERVISOR PADRE (CON VERTRETUNG Y PARTICIPACIÓN)
+// VISTA 1: HOY / RECAP DIARIO Y SUPERVISOR PADRE (CON INSPECTOR CLICABLE DETALLADO)
 // ============================================================================
 function TodayAndParentDashboard({
   appData,
@@ -1550,6 +1552,7 @@ function TodayAndParentDashboard({
   getExamUrgencyInfo,
   setAppData,
   showToast,
+  rateSubtopicRecall,
 }) {
   const todayStr = toDateStr();
   const yesterdayStr = addDaysStr(todayStr, -1);
@@ -1557,40 +1560,76 @@ function TodayAndParentDashboard({
   const activeWeekday = jsDay >= 1 && jsDay <= 5 ? jsDay : 1;
   const [selectedDayKey, setSelectedDayKey] = useState(activeWeekday);
 
-  const studentScheduleIds = (appData.schedules[currentStudent.id] && appData.schedules[currentStudent.id][selectedDayKey]) || [];
-  const todaySubjects = studentScheduleIds.map((id) => appData.subjects.find((s) => s.id === id)).filter(Boolean);
+  // Modal inspector cuando picas en cualquier indicador (Recall, Flojos, Horas, Participación)
+  const [inspectorModal, setInspectorModal] = useState(null); // { type: 'recall'|'weak'|'hours'|'participation', studentId }
+
+  const studentScheduleIds =
+    (appData.schedules[currentStudent.id] && appData.schedules[currentStudent.id][selectedDayKey]) || [];
+  const todaySubjects = studentScheduleIds
+    .map((id) => appData.subjects.find((s) => s.id === id))
+    .filter(Boolean);
 
   const upcomingExams = appData.exams
     .filter((ex) => ex.student_id === currentStudent.id && diffDaysFromToday(ex.exam_date) >= 0)
     .sort((a, b) => a.exam_date.localeCompare(b.exam_date));
 
-  const getStudentQuickStats = (stuId) => {
-    const todayMins = appData.work_logs.filter((l) => l.student_id === stuId && l.date === todayStr).reduce((a, b) => a + b.minutes, 0);
-    const yesterdayMins = appData.work_logs.filter((l) => l.student_id === stuId && l.date === yesterdayStr).reduce((a, b) => a + b.minutes, 0);
-    const allSubs = appData.topics.filter((t) => t.student_id === stuId).flatMap((t) => t.subtopics);
-    const dueRecall = allSubs.filter((st) => st.next_recall_date <= todayStr).length;
-    const weakCount = allSubs.filter((st) => st.comprehension <= 2).length;
-    const nextExam = appData.exams.filter((e) => e.student_id === stuId && diffDaysFromToday(e.exam_date) >= 0).sort((a, b) => a.exam_date.localeCompare(b.exam_date))[0];
-    const partStats = computeParticipationStats(appData.class_sessions || [], stuId);
-    const todaySessions = (appData.class_sessions || []).filter((s) => s.student_id === stuId && s.date === todayStr);
-    const todayVertretungen = todaySessions.filter((s) => s.status === 'vertretung' || s.status === 'entfall').length;
-    return { todayMins, yesterdayMins, dueRecall, weakCount, nextExam, partStats, todayVertretungen };
+  const getStudentSubtopicsEnriched = (stuId) => {
+    return appData.topics
+      .filter((t) => t.student_id === stuId)
+      .flatMap((t) => {
+        const subj = appData.subjects.find((s) => s.id === t.subject_id);
+        return t.subtopics.map((st) => ({
+          ...st,
+          topic_id: t.id,
+          topic_title: t.title,
+          subject_id: t.subject_id,
+          subject_name: subj?.name || 'Asignatura',
+          subject_icon: subj?.icon || '📘',
+        }));
+      });
   };
 
-  // Sesiones registradas hoy para el alumno actual
+  const getStudentQuickStats = (stuId) => {
+    const todayMins = appData.work_logs
+      .filter((l) => l.student_id === stuId && l.date === todayStr)
+      .reduce((a, b) => a + b.minutes, 0);
+    const yesterdayMins = appData.work_logs
+      .filter((l) => l.student_id === stuId && l.date === yesterdayStr)
+      .reduce((a, b) => a + b.minutes, 0);
+    const allSubs = getStudentSubtopicsEnriched(stuId);
+    const dueRecallList = allSubs.filter((st) => st.next_recall_date <= todayStr);
+    const weakList = allSubs.filter((st) => st.comprehension <= 2);
+    const nextExam = appData.exams
+      .filter((e) => e.student_id === stuId && diffDaysFromToday(e.exam_date) >= 0)
+      .sort((a, b) => a.exam_date.localeCompare(b.exam_date))[0];
+    const partStats = computeParticipationStats(appData.class_sessions || [], stuId);
+    return {
+      todayMins,
+      yesterdayMins,
+      dueRecall: dueRecallList.length,
+      dueRecallList,
+      weakCount: weakList.length,
+      weakList,
+      nextExam,
+      partStats,
+    };
+  };
+
   const studentTodaySessions = (appData.class_sessions || []).filter(
     (s) => s.student_id === currentStudent.id && s.date === todayStr
   );
 
+  const curStats = getStudentQuickStats(currentStudent.id);
+
   return (
     <div className="space-y-4">
-      {/* MODO PADRE: COMPARATIVA ENRIQUE VS FERNANDO (CON PARTICIPACIÓN ORAL) */}
+      {/* MODO PADRE: COMPARATIVA ENRIQUE VS FERNANDO (CAJAS CLICABLES PARA VER DETALLE) */}
       {activeProfile === 'parent' && (
         <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-4 shadow-md border border-slate-700">
           <div className="flex items-center justify-between mb-3">
             <div>
               <span className="text-[11px] uppercase tracking-wider font-bold text-amber-400 flex items-center gap-1">
-                <Users className="w-3.5 h-3.5" /> Panel Familiar del Padre
+                <Users className="w-3.5 h-3.5" /> Panel Familiar del Padre (Pica en cualquier dato para ver qué es)
               </span>
               <h2 className="text-base sm:text-lg font-bold">
                 Seguimiento Hoy ({formatHumanDate(todayStr)})
@@ -1600,7 +1639,7 @@ function TodayAndParentDashboard({
               onClick={() => setActiveTab('recall')}
               className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1 shadow"
             >
-              <Brain className="w-4 h-4" /> Preguntar
+              <Brain className="w-4 h-4" /> Ir a Recall
             </button>
           </div>
 
@@ -1613,7 +1652,9 @@ function TodayAndParentDashboard({
                   key={stu.id}
                   onClick={() => setParentSelectedStudent(stu.id)}
                   className={`cursor-pointer rounded-xl p-3 transition border ${
-                    isFocused ? 'bg-white/15 border-amber-400 ring-1 ring-amber-400/50' : 'bg-white/5 border-white/10 hover:bg-white/10'
+                    isFocused
+                      ? 'bg-white/15 border-amber-400 ring-1 ring-amber-400/50'
+                      : 'bg-white/5 border-white/10 hover:bg-white/10'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -1627,7 +1668,7 @@ function TodayAndParentDashboard({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        openRecapForStudent(stu.id);
+                        openRecapForStudent(stu.id, todayStr, 0, null);
                       }}
                       className="px-2.5 py-1 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white text-[11px] font-semibold flex items-center gap-1"
                     >
@@ -1635,40 +1676,79 @@ function TodayAndParentDashboard({
                     </button>
                   </div>
 
+                  {/* 4 CAJAS CLICABLES CON TÍTULO Y DETALLE */}
                   <div className="grid grid-cols-4 gap-1 text-center my-2">
-                    <div className="bg-slate-900/60 rounded-lg p-1.5">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setParentSelectedStudent(stu.id);
+                        setInspectorModal({ type: 'hours', studentId: stu.id });
+                      }}
+                      className="bg-slate-900/70 hover:bg-slate-900 rounded-lg p-1.5 border border-white/10 transition active:scale-95"
+                    >
                       <div className="text-xs font-bold text-emerald-400">{formatMinutes(st.todayMins)}</div>
-                      <div className="text-[9px] text-slate-400">Hoy</div>
-                    </div>
-                    <div className="bg-slate-900/60 rounded-lg p-1.5">
-                      <div className="text-xs font-bold text-amber-400">{st.dueRecall}</div>
-                      <div className="text-[9px] text-slate-400">Recall</div>
-                    </div>
-                    <div className="bg-slate-900/60 rounded-lg p-1.5">
-                      <div className="text-xs font-bold text-rose-400">{st.weakCount}</div>
-                      <div className="text-[9px] text-slate-400">Flojos 🔴</div>
-                    </div>
-                    <div className="bg-slate-900/60 rounded-lg p-1.5" title="Media de Participación en clase (1=Muy alta, 5=Baja)">
+                      <div className="text-[9px] text-slate-300 underline">Hoy  🔍</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setParentSelectedStudent(stu.id);
+                        setInspectorModal({ type: 'recall', studentId: stu.id });
+                      }}
+                      className="bg-slate-900/70 hover:bg-slate-900 rounded-lg p-1.5 border border-white/10 transition active:scale-95"
+                    >
+                      <div className="text-xs font-bold text-amber-400">⚡ {st.dueRecall}</div>
+                      <div className="text-[9px] text-slate-300 underline">Recall 🔍</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setParentSelectedStudent(stu.id);
+                        setInspectorModal({ type: 'weak', studentId: stu.id });
+                      }}
+                      className="bg-slate-900/70 hover:bg-slate-900 rounded-lg p-1.5 border border-white/10 transition active:scale-95"
+                    >
+                      <div className="text-xs font-bold text-rose-400">🔴 {st.weakCount}</div>
+                      <div className="text-[9px] text-slate-300 underline">Flojos 🔍</div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setParentSelectedStudent(stu.id);
+                        setInspectorModal({ type: 'participation', studentId: stu.id });
+                      }}
+                      className="bg-slate-900/70 hover:bg-slate-900 rounded-lg p-1.5 border border-white/10 transition active:scale-95"
+                    >
                       <div className="text-xs font-bold text-sky-300">
                         {st.partStats.avgEmoji} Ø {st.partStats.avgGradeStr}
                       </div>
-                      <div className="text-[9px] text-slate-400">Particip.</div>
-                    </div>
+                      <div className="text-[9px] text-slate-300 underline">Particip. 🔍</div>
+                    </button>
                   </div>
 
                   <div className="flex items-center justify-between gap-1 text-[11px]">
                     {st.nextExam ? (
-                      <div className="flex-1 bg-amber-500/20 border border-amber-400/30 text-amber-200 px-2 py-1 rounded-lg flex items-center justify-between truncate">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setParentSelectedStudent(stu.id);
+                          setActiveTab('calendar');
+                        }}
+                        className="flex-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/30 text-amber-200 px-2 py-1 rounded-lg flex items-center justify-between truncate text-left"
+                      >
                         <span className="truncate">🎓 {st.nextExam.title}</span>
-                        <span className="font-bold ml-1 shrink-0">en {diffDaysFromToday(st.nextExam.exam_date)}d</span>
-                      </div>
+                        <span className="font-bold ml-1 shrink-0">en {diffDaysFromToday(st.nextExam.exam_date)}d →</span>
+                      </button>
                     ) : (
                       <div className="text-slate-400 italic">Sin exámenes próximos</div>
-                    )}
-                    {st.partStats.highStreak > 0 && (
-                      <span className="px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-bold shrink-0">
-                        🔥 {st.partStats.highStreak} clases alta
-                      </span>
                     )}
                   </div>
                 </div>
@@ -1678,7 +1758,56 @@ function TodayAndParentDashboard({
         </div>
       )}
 
-      {/* RUTINA DE TARDE: RECAP GUIADO SEGÚN EL HORARIO (CON TACHADO DE VERTRETUNG) */}
+      {/* ACCESO DIRECTO A LOS ACTIVE RECALL DE HOY (CON TÍTULOS VISIBLES Y CLICABLES) */}
+      {curStats.dueRecallList.length > 0 && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-3.5 shadow-sm space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-extrabold text-amber-950 flex items-center gap-1.5">
+              ⚡ Active Recall pendientes para hoy ({curStats.dueRecallList.length}) • {currentStudent.name}
+            </span>
+            <button
+              onClick={() => setActiveTab('recall')}
+              className="text-xs font-bold text-amber-900 underline"
+            >
+              Abrir modo preguntador →
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {curStats.dueRecallList.map((item) => {
+              const comp = COMPREHENSION_LEVELS.find((c) => c.id === item.comprehension);
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => setInspectorModal({ type: 'single_recall', studentId: currentStudent.id, item })}
+                  className="p-2.5 rounded-xl bg-white border border-amber-300 hover:border-indigo-500 cursor-pointer transition flex items-center justify-between gap-2 shadow-2xs"
+                >
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-bold text-indigo-600 truncate">
+                      {item.subject_icon} {item.subject_name} • 📂 {item.topic_title}
+                    </div>
+                    <div className="text-xs font-extrabold text-slate-900 truncate mt-0.5">
+                      ⚡ {item.title}
+                    </div>
+                    {item.notes && (
+                      <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                        📝 {item.notes}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${comp?.badgeClass}`}>
+                      {comp?.emoji}
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-slate-400" />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* RUTINA DE TARDE: RECAP GUIADO SEGÚN EL HORARIO */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-indigo-100">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
           <div>
@@ -1694,7 +1823,7 @@ function TodayAndParentDashboard({
           </div>
 
           <button
-            onClick={() => openRecapForStudent(currentStudent.id)}
+            onClick={() => openRecapForStudent(currentStudent.id, todayStr, 0, null)}
             className="w-full sm:w-auto px-4 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-sm shadow flex items-center justify-center gap-2 active:scale-95 transition"
           >
             <Sparkles className="w-4 h-4" />
@@ -1702,7 +1831,7 @@ function TodayAndParentDashboard({
           </button>
         </div>
 
-        {/* SELECTOR DE DÍA Y CLASES DEL HORARIO (CON TACHADO SI FUE VERTRETUNG / ENTFALL) */}
+        {/* SELECTOR DE DÍA Y CLASES DEL HORARIO */}
         <div className="mt-3">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-600 flex items-center gap-1">
@@ -1744,7 +1873,6 @@ function TodayAndParentDashboard({
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {todaySubjects.map((subj, idx) => {
-                // Buscar si ya se registró sesión hoy para esta hora o asignatura
                 const session =
                   studentTodaySessions.find((s) => s.period_idx === idx && s.subject_id === subj.id) ||
                   studentTodaySessions.find((s) => s.subject_id === subj.id);
@@ -1798,7 +1926,13 @@ function TodayAndParentDashboard({
                         )}
                         {session.status === 'normal' && (
                           <div className="text-[11px] text-emerald-900 font-semibold truncate">
-                            ✅ {session.subtopic_title || session.topic_title || 'Recap completado'}
+                            ✅ {session.topic_title ? `${session.topic_title} ➔ ` : ''}
+                            {session.subtopic_title || 'Recap completado'}
+                          </div>
+                        )}
+                        {session.note && (
+                          <div className="text-[10px] text-slate-600 italic truncate">
+                            📝 {session.note}
                           </div>
                         )}
                         {partObj && partObj.id !== 'na' && (
@@ -1813,7 +1947,7 @@ function TodayAndParentDashboard({
                     ) : (
                       <div className="text-[11px] text-indigo-600 font-semibold flex items-center justify-between pt-1 border-t border-slate-200/60">
                         <span>Pendiente de Recap</span>
-                        <span>Registrar →</span>
+                        <span>Registrar ✏️</span>
                       </div>
                     )}
                   </div>
@@ -1833,20 +1967,28 @@ function TodayAndParentDashboard({
               Radar de Exámenes ({currentStudent.name})
             </h3>
             <button onClick={() => setActiveTab('calendar')} className="text-xs font-bold text-indigo-600 hover:underline">
-              Ver calendario
+              Ver en Calendario →
             </button>
           </div>
           {upcomingExams.map((ex) => {
             const urgency = getExamUrgencyInfo(ex.exam_date);
             const subj = appData.subjects.find((s) => s.id === ex.subject_id);
             return (
-              <div key={ex.id} className={`p-3 rounded-xl border flex items-center justify-between gap-2 ${urgency.bannerColor}`}>
+              <div
+                key={ex.id}
+                onClick={() => setActiveTab('calendar')}
+                className={`p-3 rounded-xl border cursor-pointer flex items-center justify-between gap-2 ${urgency.bannerColor}`}
+              >
                 <div>
-                  <div className="font-bold text-xs uppercase opacity-90">{urgency.badge}</div>
+                  <div className="font-bold text-xs uppercase opacity-90">{urgency.badge} • {formatHumanDate(ex.exam_date)}</div>
                   <div className="font-extrabold text-sm">{subj?.icon} {subj?.name}: {ex.title}</div>
                 </div>
                 <button
-                  onClick={() => setActiveTab('recall')}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveTab('recall');
+                  }}
                   className="px-2.5 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-bold shrink-0"
                 >
                   Repasar
@@ -1856,6 +1998,272 @@ function TodayAndParentDashboard({
           })}
         </div>
       )}
+
+      {/* MODAL INSPECTOR EMERGENTE AL PICAR EN CUALQUIER ELEMENTO (RECALL, FLOJOS, HORAS, PARTICIPACIÓN) */}
+      {inspectorModal && (
+        <QuickDetailInspectorModal
+          appData={appData}
+          inspector={inspectorModal}
+          onClose={() => setInspectorModal(null)}
+          rateSubtopicRecall={rateSubtopicRecall}
+          openRecapForStudent={openRecapForStudent}
+          setActiveTab={setActiveTab}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// MODAL INSPECTOR DETALLADO (MUESTRA TÍTULO, TEMA, SUBTEMA Y DESCRIPCIÓN AL PICAR)
+// ============================================================================
+function QuickDetailInspectorModal({
+  appData,
+  inspector,
+  onClose,
+  rateSubtopicRecall,
+  openRecapForStudent,
+  setActiveTab,
+}) {
+  const stu = appData.students.find((s) => s.id === inspector.studentId) || appData.students[0];
+  const todayStr = toDateStr();
+
+  const allSubs = appData.topics
+    .filter((t) => t.student_id === stu.id)
+    .flatMap((t) => {
+      const subj = appData.subjects.find((s) => s.id === t.subject_id);
+      return t.subtopics.map((st) => ({
+        ...st,
+        topic_id: t.id,
+        topic_title: t.title,
+        subject_id: t.subject_id,
+        subject_name: subj?.name || 'Asignatura',
+        subject_icon: subj?.icon || '📘',
+      }));
+    });
+
+  const [selectedSub, setSelectedSub] = useState(
+    inspector.type === 'single_recall' ? inspector.item : null
+  );
+
+  let title = '';
+  let list = [];
+  if (inspector.type === 'recall' || inspector.type === 'single_recall') {
+    title = `⚡ Active Recall pendientes (${stu.name})`;
+    list = allSubs.filter((st) => st.next_recall_date <= todayStr);
+  } else if (inspector.type === 'weak') {
+    title = `🔴/🟠 Subtemas con dudas o flojos (${stu.name})`;
+    list = allSubs.filter((st) => st.comprehension <= 2);
+  } else if (inspector.type === 'hours') {
+    title = `⏱️ Bloques de estudio registrados (${stu.name})`;
+    list = (appData.work_logs || []).filter((l) => l.student_id === stu.id).slice(0, 15);
+  } else if (inspector.type === 'participation') {
+    title = `🙋‍♂️ Historial de Clases y Participación (${stu.name})`;
+    list = (appData.class_sessions || []).filter((s) => s.student_id === stu.id).slice(0, 15);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-3">
+      <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+          <div>
+            <span className="text-[10px] font-bold uppercase text-amber-400">
+              🔍 Detalle Completo • {stu.avatar} {stu.name}
+            </span>
+            <h3 className="font-bold text-sm">{title}</h3>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg bg-slate-800 text-slate-300">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3 overflow-y-auto">
+          {selectedSub ? (
+            <div className="p-4 rounded-2xl bg-amber-50/70 border-2 border-amber-400 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold text-indigo-700">
+                  {selectedSub.subject_icon} {selectedSub.subject_name} • 📂 {selectedSub.topic_title}
+                </span>
+                <button
+                  onClick={() => setSelectedSub(null)}
+                  className="text-xs font-bold text-slate-500 underline"
+                >
+                  ← Ver todos
+                </button>
+              </div>
+              <h4 className="font-black text-base text-slate-900">
+                ⚡ {selectedSub.title}
+              </h4>
+              <div className="p-3 rounded-xl bg-white border border-amber-200 text-xs text-slate-800">
+                <div className="font-bold text-amber-900 mb-1">📝 Descripción / Explicación / Apuntes:</div>
+                <p className="whitespace-pre-wrap">
+                  {selectedSub.notes || 'Sin descripción adicional registrada todavía.'}
+                </p>
+              </div>
+
+              {rateSubtopicRecall && (
+                <div>
+                  <div className="text-[11px] font-extrabold uppercase text-slate-500 mb-1.5 text-center">
+                    Calificar repaso de Active Recall ahora mismo:
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { r: 1, emoji: '🔄', label: 'No supo', sub: '1d', cls: 'bg-red-50 text-red-900 border-red-300' },
+                      { r: 2, emoji: '😓', label: 'Dudas', sub: '2-3d', cls: 'bg-amber-50 text-amber-900 border-amber-300' },
+                      { r: 3, emoji: '👍', label: 'Bien', sub: '4-5d', cls: 'bg-emerald-50 text-emerald-900 border-emerald-300' },
+                      { r: 4, emoji: '🚀', label: 'Perfecto', sub: '7d+', cls: 'bg-indigo-50 text-indigo-900 border-indigo-300' },
+                    ].map((btn) => (
+                      <button
+                        key={btn.r}
+                        onClick={() => {
+                          rateSubtopicRecall({
+                            student_id: stu.id,
+                            topic_id: selectedSub.topic_id,
+                            subtopic_id: selectedSub.id,
+                            rating: btn.r,
+                            minutesSpent: 10,
+                          });
+                          setSelectedSub(null);
+                        }}
+                        className={`p-2 rounded-xl border text-center font-bold text-xs ${btn.cls}`}
+                      >
+                        <div className="text-base">{btn.emoji}</div>
+                        <div>{btn.label}</div>
+                        <div className="text-[9px] opacity-75">{btn.sub}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              {(inspector.type === 'recall' || inspector.type === 'single_recall' || inspector.type === 'weak') && (
+                list.length === 0 ? (
+                  <p className="text-xs text-slate-500 text-center py-6">
+                    🎉 No hay subtemas pendientes en esta categoría.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {list.map((st) => {
+                      const comp = COMPREHENSION_LEVELS.find((c) => c.id === st.comprehension);
+                      return (
+                        <div
+                          key={st.id}
+                          onClick={() => setSelectedSub(st)}
+                          className="p-3 rounded-xl border border-slate-200 hover:border-indigo-400 bg-slate-50 cursor-pointer transition space-y-1"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-bold text-indigo-600">
+                              {st.subject_icon} {st.subject_name} • 📂 {st.topic_title}
+                            </span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${comp?.badgeClass}`}>
+                              {comp?.emoji} {comp?.short}
+                            </span>
+                          </div>
+                          <div className="font-extrabold text-sm text-slate-900">
+                            📄 {st.title}
+                          </div>
+                          {st.notes ? (
+                            <p className="text-xs text-slate-600 bg-white p-2 rounded-lg border border-slate-200/80">
+                              📝 {st.notes}
+                            </p>
+                          ) : (
+                            <p className="text-[11px] text-slate-400 italic">Sin descripción adicional</p>
+                          )}
+                          <div className="text-[10px] text-indigo-600 font-bold pt-0.5">
+                            👆 Pica aquí para abrir y calificar este Active Recall
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              )}
+
+              {inspector.type === 'hours' && (
+                list.length === 0 ? (
+                  <p className="text-xs text-slate-500 text-center py-6">Sin bloques de tiempo aún.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {list.map((lg) => {
+                      const subj = appData.subjects.find((s) => s.id === lg.subject_id);
+                      const top = appData.topics.find((t) => t.id === lg.topic_id);
+                      const sub = top?.subtopics.find((st) => st.id === lg.subtopic_id);
+                      return (
+                        <div key={lg.id} className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                          <div>
+                            <div className="font-bold text-slate-900">
+                              {subj?.icon} {subj?.name} • {top?.title || 'Estudio'}
+                            </div>
+                            {sub && <div className="text-slate-600">📄 {sub.title}</div>}
+                            {lg.note && <div className="text-slate-500 italic text-[11px]">{lg.note}</div>}
+                          </div>
+                          <div className="text-right shrink-0 ml-2">
+                            <div className="font-black text-indigo-700">+{lg.minutes}m</div>
+                            <div className="text-[10px] text-slate-500">{formatHumanDate(lg.date)}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              )}
+
+              {inspector.type === 'participation' && (
+                list.length === 0 ? (
+                  <p className="text-xs text-slate-500 text-center py-6">Sin sesiones de clase aún.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {list.map((sess) => {
+                      const subj = appData.subjects.find((s) => s.id === sess.subject_id);
+                      const pObj = PARTICIPATION_LEVELS.find((p) => p.id === String(sess.participation));
+                      return (
+                        <div
+                          key={sess.id}
+                          onClick={() => {
+                            onClose();
+                            openRecapForStudent &&
+                              openRecapForStudent(sess.student_id, sess.date, sess.period_idx || 0, sess.subject_id);
+                          }}
+                          className="p-3 rounded-xl bg-slate-50 border border-slate-200 hover:border-indigo-400 cursor-pointer flex items-center justify-between text-xs"
+                        >
+                          <div>
+                            <div className="font-bold text-slate-900">
+                              {formatHumanDate(sess.date)} • {subj?.icon} {subj?.name}
+                            </div>
+                            {sess.status === 'normal' ? (
+                              <div className="text-slate-700">
+                                📂 {sess.topic_title} ➔ 📄 {sess.subtopic_title}
+                              </div>
+                            ) : (
+                              <div className="text-amber-800 font-bold uppercase text-[11px]">
+                                {sess.status === 'vertretung' ? '🔄 Vertretung' : '🚫 Entfall'}
+                              </div>
+                            )}
+                            {sess.note && <div className="text-slate-500 italic text-[11px]">📝 {sess.note}</div>}
+                          </div>
+                          {pObj && (
+                            <span className={`px-2 py-1 rounded-lg border font-bold text-[11px] shrink-0 ${pObj.badgeClass}`}>
+                              {pObj.emoji} {pObj.label}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="p-3 border-t border-slate-200 bg-slate-50 flex justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">
+            Cerrar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2772,10 +3180,13 @@ function TopicsAndTasksView({
 }
 
 // ============================================================================
-// VISTA 3: ACTIVE RECALL
+// VISTA 3: ACTIVE RECALL (CON LISTA CLICABLE DE TARJETAS, TÍTULOS Y DESCRIPCIONES)
 // ============================================================================
 function ActiveRecallParentView({ appData, currentStudent, setParentSelectedStudent, rateSubtopicRecall }) {
   const todayStr = toDateStr();
+  const [filterTab, setFilterTab] = useState('due'); // 'due' | 'weak' | 'all'
+  const [selectedCardId, setSelectedCardId] = useState(null);
+
   const allCards = useMemo(() => {
     return appData.topics
       .filter((t) => t.student_id === currentStudent.id)
@@ -2785,35 +3196,111 @@ function ActiveRecallParentView({ appData, currentStudent, setParentSelectedStud
           ...st,
           topic_id: t.id,
           topic_title: t.title,
+          subject_id: t.subject_id,
           subject_name: subj?.name || 'Asignatura',
           subject_icon: subj?.icon || '📘',
+          isDue: st.next_recall_date <= todayStr,
         }));
-      });
-  }, [appData, currentStudent.id]);
+      })
+      .sort((a, b) => a.comprehension - b.comprehension);
+  }, [appData, currentStudent.id, todayStr]);
 
-  const [activeIdx, setActiveIdx] = useState(0);
-  const card = allCards[activeIdx] || allCards[0];
+  const dueCards = allCards.filter((c) => c.isDue);
+  const weakCards = allCards.filter((c) => c.comprehension <= 2);
+  const visibleList =
+    filterTab === 'due' ? (dueCards.length > 0 ? dueCards : allCards) : filterTab === 'weak' ? weakCards : allCards;
+
+  const card = visibleList.find((c) => c.id === selectedCardId) || visibleList[0] || null;
 
   return (
     <div className="space-y-4">
-      <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-2xl p-4 shadow">
-        <h2 className="text-base font-extrabold">⚡ Active Recall • Preguntando a {currentStudent.name}</h2>
-        <p className="text-xs text-amber-100">Hazle preguntas orales y califica su respuesta para espaciar el repaso.</p>
+      <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-2xl p-4 shadow flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <h2 className="text-base font-extrabold">
+            ⚡ Active Recall • Preguntando a {currentStudent.avatar} {currentStudent.name}
+          </h2>
+          <p className="text-xs text-amber-100">
+            Pica en cualquier subtema de la lista de abajo para ver su título, tema y descripción.
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {appData.students.map((stu) => (
+            <button
+              key={stu.id}
+              onClick={() => {
+                setParentSelectedStudent(stu.id);
+                setSelectedCardId(null);
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                currentStudent.id === stu.id
+                  ? 'bg-slate-900 text-white shadow'
+                  : 'bg-white/20 text-white hover:bg-white/30'
+              }`}
+            >
+              {stu.avatar} {stu.name}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* Pestañas de filtro */}
+      <div className="grid grid-cols-3 gap-1.5 bg-white p-1.5 rounded-2xl shadow-sm border border-slate-200">
+        <button
+          onClick={() => setFilterTab('due')}
+          className={`py-2 px-2 rounded-xl text-xs font-bold transition ${
+            filterTab === 'due' ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-600'
+          }`}
+        >
+          🔥 Para hoy ({dueCards.length})
+        </button>
+        <button
+          onClick={() => setFilterTab('weak')}
+          className={`py-2 px-2 rounded-xl text-xs font-bold transition ${
+            filterTab === 'weak' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-600'
+          }`}
+        >
+          📕 Flojos 🔴/🟠 ({weakCards.length})
+        </button>
+        <button
+          onClick={() => setFilterTab('all')}
+          className={`py-2 px-2 rounded-xl text-xs font-bold transition ${
+            filterTab === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600'
+          }`}
+        >
+          📚 Todos ({allCards.length})
+        </button>
+      </div>
+
+      {/* TARJETA DE PREGUNTA ACTIVA ARRIBA */}
       {card ? (
         <div className="bg-white rounded-2xl p-5 shadow border-2 border-amber-400 space-y-4">
-          <div>
-            <span className="text-xs font-bold text-indigo-600">{card.subject_icon} {card.subject_name} • {card.topic_title}</span>
-            <h3 className="text-lg font-black text-slate-900 mt-1">❓ "{card.title}"</h3>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200">
+              {card.subject_icon} {card.subject_name} • 📂 Tema: {card.topic_title}
+            </span>
+            <span className="text-xs text-slate-500 font-semibold">
+              Próximo repaso: <strong>{formatHumanDate(card.next_recall_date)}</strong>
+            </span>
           </div>
 
-          <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-slate-800">
-            <strong>💡 Chuleta para Papá:</strong> {card.notes || 'Pídele que te explique este subtema con sus palabras y un ejemplo.'}
+          <div>
+            <div className="text-[11px] font-bold uppercase text-slate-400">Subtema a preguntar:</div>
+            <h3 className="text-lg font-black text-slate-900 mt-0.5">❓ "{card.title}"</h3>
+          </div>
+
+          <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-200 text-xs text-slate-800 space-y-1">
+            <div className="font-extrabold text-amber-950">
+              💡 Descripción / Chuleta para Papá:
+            </div>
+            <p className="whitespace-pre-wrap">
+              {card.notes || 'Pídele que te explique este subtema con sus palabras y ponga un ejemplo.'}
+            </p>
           </div>
 
           <div>
-            <div className="text-xs font-bold uppercase text-slate-500 mb-2 text-center">¿Cómo ha respondido {currentStudent.name}?</div>
+            <div className="text-xs font-bold uppercase text-slate-500 mb-2 text-center">
+              ¿Cómo ha respondido {currentStudent.name}?
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[
                 { r: 1, emoji: '🔄', label: 'No se acordaba', sub: 'Mañana (1d)', cls: 'bg-red-50 text-red-900 border-red-300' },
@@ -2824,9 +3311,13 @@ function ActiveRecallParentView({ appData, currentStudent, setParentSelectedStud
                 <button
                   key={btn.r}
                   onClick={() => {
-                    rateSubtopicRecall({ student_id: currentStudent.id, topic_id: card.topic_id, subtopic_id: card.id, rating: btn.r, minutesSpent: 10 });
-                    if (activeIdx < allCards.length - 1) setActiveIdx(activeIdx + 1);
-                    else setActiveIdx(0);
+                    rateSubtopicRecall({
+                      student_id: currentStudent.id,
+                      topic_id: card.topic_id,
+                      subtopic_id: card.id,
+                      rating: btn.r,
+                      minutesSpent: 10,
+                    });
                   }}
                   className={`p-3 rounded-xl border text-center transition active:scale-95 ${btn.cls}`}
                 >
@@ -2839,8 +3330,60 @@ function ActiveRecallParentView({ appData, currentStudent, setParentSelectedStud
           </div>
         </div>
       ) : (
-        <div className="bg-white p-8 rounded-2xl text-center text-xs text-slate-500">No hay temas creados aún.</div>
+        <div className="bg-white p-8 rounded-2xl text-center text-xs text-slate-500">
+          No hay subtemas en esta vista.
+        </div>
       )}
+
+      {/* LISTA COMPLETA Y CLICABLE DE TODOS LOS ACTIVE RECALL (CON TÍTULO, TEMA Y DESCRIPCIÓN) */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-2.5">
+        <div className="text-xs font-extrabold uppercase text-slate-600">
+          📋 Lista de Subtemas (Pica en cualquiera para ver su pregunta y descripción):
+        </div>
+        <div className="space-y-2">
+          {visibleList.map((item) => {
+            const comp = COMPREHENSION_LEVELS.find((c) => c.id === item.comprehension);
+            const isSelected = card?.id === item.id;
+            return (
+              <div
+                key={item.id}
+                onClick={() => setSelectedCardId(item.id)}
+                className={`p-3 rounded-xl border cursor-pointer transition flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                  isSelected
+                    ? 'bg-amber-50/80 border-amber-400 ring-2 ring-amber-300'
+                    : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <div className="space-y-0.5 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[11px] font-bold text-indigo-700">
+                      {item.subject_icon} {item.subject_name}
+                    </span>
+                    <span className="text-[11px] text-slate-500">• 📂 {item.topic_title}</span>
+                  </div>
+                  <div className="font-extrabold text-xs sm:text-sm text-slate-900">
+                    ⚡ {item.title}
+                  </div>
+                  {item.notes && (
+                    <div className="text-[11px] text-slate-600 truncate">
+                      📝 {item.notes}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  <span className="text-[10px] text-slate-500 font-semibold">
+                    Recall: {formatHumanDate(item.next_recall_date)}
+                  </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${comp?.badgeClass}`}>
+                    {comp?.emoji} {comp?.short}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -2863,6 +3406,7 @@ function ExamsAndGermanGradesView({
   showToast,
   setActiveTab,
   openRecapForStudent,
+  rateSubtopicRecall,
 }) {
   // Vista activa: 'calendar' (Tabla mensual) | 'list' (Lista y expediente)
   const [viewMode, setViewMode] = useState(initialViewMode);
@@ -2904,11 +3448,34 @@ function ExamsAndGermanGradesView({
     return (appData.tasks || []).filter((t) => visibleStudentIds.includes(t.student_id));
   }, [appData.tasks, visibleStudentIds]);
 
+  const [dayPopupOpen, setDayPopupOpen] = useState(false);
+  const [expandedSubtopicId, setExpandedSubtopicId] = useState(null);
+
   const filteredSessions = useMemo(() => {
     return (appData.class_sessions || [])
       .filter((s) => visibleStudentIds.includes(s.student_id))
       .sort((a, b) => (a.period_idx || 0) - (b.period_idx || 0));
   }, [appData.class_sessions, visibleStudentIds]);
+
+  const filteredRecalls = useMemo(() => {
+    return appData.topics
+      .filter((t) => visibleStudentIds.includes(t.student_id))
+      .flatMap((t) => {
+        const subj = appData.subjects.find((s) => s.id === t.subject_id);
+        const stu = appData.students.find((st) => st.id === t.student_id);
+        return (t.subtopics || []).map((sub) => ({
+          ...sub,
+          student_id: t.student_id,
+          student_name: stu?.name || '',
+          student_avatar: stu?.avatar || '👦',
+          topic_id: t.id,
+          topic_title: t.title,
+          subject_id: t.subject_id,
+          subject_name: subj?.name || 'Asignatura',
+          subject_icon: subj?.icon || '📘',
+        }));
+      });
+  }, [appData.topics, appData.subjects, appData.students, visibleStudentIds]);
 
   // Navegación de meses
   const goPrevMonth = () => {
@@ -3038,6 +3605,7 @@ function ExamsAndGermanGradesView({
   const selectedDayExams = filteredExams.filter((e) => e.exam_date === selectedDate);
   const selectedDayTasks = filteredTasks.filter((t) => t.due_date === selectedDate);
   const selectedDaySessions = filteredSessions.filter((s) => s.date === selectedDate);
+  const selectedDayRecalls = filteredRecalls.filter((r) => r.next_recall_date === selectedDate);
 
   const handleDeleteSession = (sessId) => {
     setAppData((prev) => ({
@@ -3217,11 +3785,15 @@ function ExamsAndGermanGradesView({
                   (t) => t.due_date === cell.dateStr && !t.completed
                 );
                 const daySessions = filteredSessions.filter((s) => s.date === cell.dateStr);
+                const dayRecalls = filteredRecalls.filter((r) => r.next_recall_date === cell.dateStr);
 
                 return (
                   <div
                     key={cell.dateStr}
-                    onClick={() => setSelectedDate(cell.dateStr)}
+                    onClick={() => {
+                      setSelectedDate(cell.dateStr);
+                      setDayPopupOpen(true);
+                    }}
                     className={`min-h-[74px] sm:min-h-[96px] p-1 sm:p-1.5 cursor-pointer transition flex flex-col justify-between relative ${
                       !cell.isCurrentMonth
                         ? 'bg-slate-50/60 text-slate-300'
@@ -3250,21 +3822,29 @@ function ExamsAndGermanGradesView({
                         {cell.dayNum}
                       </span>
 
-                      <div className="flex items-center gap-0.5">
+                      <div className="flex items-center gap-0.5 flex-wrap justify-end">
+                        {dayRecalls.length > 0 && (
+                          <span
+                            className="text-[9px] font-extrabold px-1 py-0.2 rounded bg-amber-100 text-amber-900 border border-amber-400"
+                            title={`${dayRecalls.length} Active Recall: ${dayRecalls.map((r) => r.title).join(', ')}`}
+                          >
+                            ⚡{dayRecalls.length}
+                          </span>
+                        )}
                         {daySessions.length > 0 && (
                           <span
                             className="text-[9px] font-extrabold px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200"
-                            title={`${daySessions.length} clase(s) / Recap registrados este día`}
+                            title={`${daySessions.length} clase(s) / Recap registrados`}
                           >
                             📝{daySessions.length}
                           </span>
                         )}
                         {dayPendingTasks.length > 0 && (
                           <span
-                            className="text-[10px] font-bold px-1 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300"
-                            title={`${dayPendingTasks.length} deber(es) para entregar`}
+                            className="text-[9px] font-bold px-1 py-0.2 rounded bg-rose-100 text-rose-800 border border-rose-300"
+                            title={`${dayPendingTasks.length} deber(es)`}
                           >
-                            📌{dayPendingTasks.length > 1 ? dayPendingTasks.length : ''}
+                            📌{dayPendingTasks.length}
                           </span>
                         )}
                       </div>
@@ -3310,6 +3890,23 @@ function ExamsAndGermanGradesView({
                           </div>
                         );
                       })}
+
+                      {/* Píldoras de Active Recall en la casilla con título visible */}
+                      {dayRecalls.slice(0, 2).map((rc) => (
+                        <div
+                          key={rc.id}
+                          className="px-1.5 py-0.5 rounded-md border border-amber-300 bg-amber-50/90 text-amber-950 text-[9px] leading-tight flex items-center gap-0.5 truncate"
+                          title={`Active Recall: ${rc.subject_name} - ${rc.title}`}
+                        >
+                          <span className="shrink-0">⚡</span>
+                          <span className="truncate font-bold">{rc.title}</span>
+                        </div>
+                      ))}
+                      {dayRecalls.length > 2 && (
+                        <div className="text-[9px] font-bold text-amber-800 pl-1">
+                          +{dayRecalls.length - 2} recall más...
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -3493,6 +4090,108 @@ function ExamsAndGermanGradesView({
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* ===============================================================
+                ACTIVE RECALL PROGRAMADOS PARA ESTE DÍA (CON TÍTULO, TEMA Y DESCRIPCIÓN)
+               =============================================================== */}
+            {selectedDayRecalls.length > 0 && (
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold uppercase text-amber-900 flex items-center gap-1.5">
+                    ⚡ Active Recall programados para este día ({selectedDayRecalls.length}):
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('recall')}
+                    className="text-xs font-bold text-amber-700 hover:underline"
+                  >
+                    Ir a pantalla Recall →
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {selectedDayRecalls.map((rc) => {
+                    const comp = COMPREHENSION_LEVELS.find((c) => c.id === rc.comprehension);
+                    const isOpen = expandedSubtopicId === rc.id;
+                    return (
+                      <div
+                        key={rc.id}
+                        className="p-3 rounded-xl bg-amber-50/70 border border-amber-300 space-y-2"
+                      >
+                        <div
+                          onClick={() => setExpandedSubtopicId(isOpen ? null : rc.id)}
+                          className="cursor-pointer flex items-start justify-between gap-2"
+                        >
+                          <div className="space-y-0.5 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[11px] font-bold text-indigo-700">
+                                {rc.student_avatar} {rc.student_name} • {rc.subject_icon} {rc.subject_name}
+                              </span>
+                              <span className="text-[11px] text-slate-600 font-semibold">
+                                • 📂 Tema: {rc.topic_title}
+                              </span>
+                            </div>
+                            <div className="font-black text-sm text-slate-900">
+                              ⚡ Subtema: "{rc.title}"
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${comp?.badgeClass}`}>
+                              {comp?.emoji} {comp?.short}
+                            </span>
+                            <span className="text-xs font-bold text-indigo-600">
+                              {isOpen ? '▴' : '▾'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Descripción siempre visible o desplegable */}
+                        <div className="p-2.5 rounded-lg bg-white border border-amber-200 text-xs text-slate-800">
+                          <span className="font-bold text-amber-900">📝 Descripción / Chuleta: </span>
+                          <span>{rc.notes || 'Sin descripción adicional escrita.'}</span>
+                        </div>
+
+                        {/* Botones para calificar el Active Recall directamente aquí */}
+                        {rateSubtopicRecall && (
+                          <div className="pt-1">
+                            <div className="text-[10px] font-bold uppercase text-slate-500 mb-1">
+                              Calificar repaso ahora:
+                            </div>
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {[
+                                { r: 1, emoji: '🔄', label: 'No supo', cls: 'bg-red-50 text-red-900 border-red-300' },
+                                { r: 2, emoji: '😓', label: 'Con ayuda', cls: 'bg-amber-50 text-amber-900 border-amber-300' },
+                                { r: 3, emoji: '👍', label: 'Bien', cls: 'bg-emerald-50 text-emerald-900 border-emerald-300' },
+                                { r: 4, emoji: '🚀', label: 'Perfecto', cls: 'bg-indigo-50 text-indigo-900 border-indigo-300' },
+                              ].map((btn) => (
+                                <button
+                                  key={btn.r}
+                                  type="button"
+                                  onClick={() =>
+                                    rateSubtopicRecall({
+                                      student_id: rc.student_id,
+                                      topic_id: rc.topic_id,
+                                      subtopic_id: rc.id,
+                                      rating: btn.r,
+                                      minutesSpent: 10,
+                                    })
+                                  }
+                                  className={`py-1.5 px-2 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-1 ${btn.cls}`}
+                                >
+                                  <span>{btn.emoji}</span>
+                                  <span>{btn.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -3761,6 +4460,246 @@ function ExamsAndGermanGradesView({
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EMERGENTE AL PICAR EN CUALQUIER DÍA O ICONO DEL CALENDARIO */}
+      {dayPopupOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-white w-full max-w-xl rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">
+                  📅 Todo lo de este día
+                </span>
+                <h3 className="font-extrabold text-base">
+                  {getFullDayNameEs(selectedDate)} ({formatHumanDate(selectedDate)})
+                </h3>
+              </div>
+              <button
+                onClick={() => setDayPopupOpen(false)}
+                className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4 overflow-y-auto">
+              {/* Acciones rápidas para esta fecha */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDayPopupOpen(false);
+                    openRecapForStudent && openRecapForStudent(currentStudent.id, selectedDate, 0, null);
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>✨ Hacer / Editar Recap</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDayPopupOpen(false);
+                    setCreateExamModalDate(selectedDate);
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>🎓 Añadir Examen</span>
+                </button>
+              </div>
+
+              {/* 1. ACTIVE RECALL DE ESTE DÍA */}
+              <div className="space-y-2">
+                <div className="text-xs font-extrabold uppercase text-amber-900">
+                  ⚡ Active Recall en esta fecha ({selectedDayRecalls.length}):
+                </div>
+                {selectedDayRecalls.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">Ningún Active Recall programado para este día.</p>
+                ) : (
+                  selectedDayRecalls.map((rc) => {
+                    const comp = COMPREHENSION_LEVELS.find((c) => c.id === rc.comprehension);
+                    return (
+                      <div key={rc.id} className="p-3 rounded-xl bg-amber-50 border border-amber-300 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-bold text-indigo-700">
+                            {rc.student_avatar} {rc.student_name} • {rc.subject_icon} {rc.subject_name} • 📂 {rc.topic_title}
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${comp?.badgeClass}`}>
+                            {comp?.emoji} {comp?.short}
+                          </span>
+                        </div>
+                        <div className="font-black text-sm text-slate-900">
+                          ⚡ "{rc.title}"
+                        </div>
+                        <div className="p-2 rounded-lg bg-white border border-amber-200 text-xs text-slate-700">
+                          <strong>📝 Descripción:</strong> {rc.notes || 'Sin descripción adicional.'}
+                        </div>
+                        {rateSubtopicRecall && (
+                          <div className="grid grid-cols-4 gap-1 pt-1">
+                            {[
+                              { r: 1, emoji: '🔄', label: 'No supo', cls: 'bg-red-50 text-red-900 border-red-300' },
+                              { r: 2, emoji: '😓', label: 'Dudas', cls: 'bg-amber-100 text-amber-900 border-amber-300' },
+                              { r: 3, emoji: '👍', label: 'Bien', cls: 'bg-emerald-50 text-emerald-900 border-emerald-300' },
+                              { r: 4, emoji: '🚀', label: 'Perfecto', cls: 'bg-indigo-50 text-indigo-900 border-indigo-300' },
+                            ].map((btn) => (
+                              <button
+                                key={btn.r}
+                                type="button"
+                                onClick={() =>
+                                  rateSubtopicRecall({
+                                    student_id: rc.student_id,
+                                    topic_id: rc.topic_id,
+                                    subtopic_id: rc.id,
+                                    rating: btn.r,
+                                    minutesSpent: 10,
+                                  })
+                                }
+                                className={`py-1.5 rounded-lg border text-[11px] font-bold ${btn.cls}`}
+                              >
+                                {btn.emoji} {btn.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* 2. EXÁMENES DE ESTE DÍA */}
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <div className="text-xs font-extrabold uppercase text-indigo-900">
+                  🎓 Exámenes en esta fecha ({selectedDayExams.length}):
+                </div>
+                {selectedDayExams.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">No hay exámenes este día.</p>
+                ) : (
+                  selectedDayExams.map((ex) => {
+                    const subj = appData.subjects.find((s) => s.id === ex.subject_id);
+                    const stu = appData.students.find((s) => s.id === ex.student_id);
+                    const allSubs = appData.topics
+                      .filter((t) => t.student_id === ex.student_id)
+                      .flatMap((t) => t.subtopics.map((st) => ({ ...st, topicTitle: t.title })));
+                    const exSubs = allSubs.filter((st) => (ex.subtopic_ids || []).includes(st.id));
+
+                    return (
+                      <div key={ex.id} className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-indigo-700">
+                            {stu?.avatar} {stu?.name} • {subj?.icon} {subj?.name}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDayPopupOpen(false);
+                              setGradingExamId(ex.id);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 font-bold text-xs"
+                          >
+                            {ex.grade_label ? `Nota: ${ex.grade_label}` : '🏅 Poner Nota'}
+                          </button>
+                        </div>
+                        <div className="font-black text-sm text-slate-900">{ex.title}</div>
+                        {exSubs.length > 0 && (
+                          <div className="space-y-1 pt-1">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase">Temas que entran:</div>
+                            {exSubs.map((st) => (
+                              <div key={st.id} className="p-2 rounded-lg bg-white border border-slate-200 text-xs">
+                                <div className="font-bold text-slate-800">📂 {st.topicTitle} ➔ 📄 {st.title}</div>
+                                {st.notes && <div className="text-[11px] text-slate-500 mt-0.5">📝 {st.notes}</div>}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* 3. RECAPS / CLASES DE ESTE DÍA */}
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <div className="text-xs font-extrabold uppercase text-emerald-900">
+                  📝 Clases y Recap registrados ({selectedDaySessions.length}):
+                </div>
+                {selectedDaySessions.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic">No hay clases registradas este día.</p>
+                ) : (
+                  selectedDaySessions.map((sess) => {
+                    const subj = appData.subjects.find((s) => s.id === sess.subject_id);
+                    const stu = appData.students.find((s) => s.id === sess.student_id);
+                    const pObj = PARTICIPATION_LEVELS.find((p) => p.id === String(sess.participation));
+                    return (
+                      <div key={sess.id} className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-200 flex items-center justify-between gap-2">
+                        <div className="space-y-0.5 min-w-0">
+                          <div className="text-xs font-bold text-slate-900">
+                            {(sess.period_idx || 0) + 1}ª hora • {stu?.avatar} {subj?.icon} {subj?.name}
+                          </div>
+                          {sess.status === 'normal' ? (
+                            <div className="text-xs text-indigo-900 font-semibold">
+                              📂 {sess.topic_title} ➔ 📄 {sess.subtopic_title}
+                            </div>
+                          ) : (
+                            <div className="text-xs font-bold text-amber-800">
+                              {sess.status === 'vertretung' ? '🔄 Vertretung' : '🚫 Entfall'}
+                            </div>
+                          )}
+                          {sess.note && <div className="text-[11px] text-slate-600 italic">📝 {sess.note}</div>}
+                          {pObj && pObj.id !== 'na' && (
+                            <div className="text-[10px] font-bold text-emerald-800">
+                              Participación: {pObj.emoji} {pObj.label} (Nota {pObj.id})
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDayPopupOpen(false);
+                            openRecapForStudent &&
+                              openRecapForStudent(sess.student_id, sess.date, sess.period_idx || 0, sess.subject_id);
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-white border border-indigo-200 text-indigo-700 text-xs font-bold shrink-0"
+                        >
+                          ✏️ Editar
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* 4. DEBERES DE ESTE DÍA */}
+              {selectedDayTasks.length > 0 && (
+                <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                  <div className="text-xs font-extrabold uppercase text-rose-900">
+                    📌 Deberes para este día ({selectedDayTasks.length}):
+                  </div>
+                  {selectedDayTasks.map((tsk) => {
+                    const subj = appData.subjects.find((s) => s.id === tsk.subject_id);
+                    return (
+                      <div key={tsk.id} className="p-2.5 rounded-xl bg-rose-50/60 border border-rose-200 text-xs font-bold text-slate-800">
+                        📌 {subj?.icon} {subj?.name}: {tsk.title}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 border-t border-slate-200 bg-slate-50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setDayPopupOpen(false)}
+                className="px-5 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}
