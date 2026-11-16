@@ -253,6 +253,21 @@ const diffDaysFromToday = (targetDateStr) => {
   return Math.round((eDate - tDate) / (1000 * 60 * 60 * 24));
 };
 
+const getWeekdayFromDateStr = (dateStr) => {
+  if (!dateStr) return 1;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const jsDay = new Date(y, m - 1, d).getDay(); // 0=Dom, 1=Lun..6=Sab
+  return jsDay >= 1 && jsDay <= 5 ? jsDay : 1;
+};
+
+const getFullDayNameEs = (dateStr) => {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const names = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const dt = new Date(y, m - 1, d);
+  return `${names[dt.getDay()]} ${String(d).padStart(2, '0')}.${String(m).padStart(2, '0')}.${y}`;
+};
+
 const formatHumanDate = (dateStr) => {
   if (!dateStr) return '';
   const diff = diffDaysFromToday(dateStr);
@@ -514,6 +529,9 @@ function App() {
 
   const [recapWizardOpen, setRecapWizardOpen] = useState(false);
   const [recapStudentId, setRecapStudentId] = useState('stu_1');
+  const [recapInitialDate, setRecapInitialDate] = useState(null);
+  const [recapInitialPeriod, setRecapInitialPeriod] = useState(0);
+  const [recapInitialSubjectId, setRecapInitialSubjectId] = useState(null);
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [quickTimeModal, setQuickTimeModal] = useState(null);
   const [editProfileModal, setEditProfileModal] = useState(false);
@@ -524,8 +542,11 @@ function App() {
     setTimeout(() => setToastMessage(null), 3200);
   };
 
-  const openRecapForStudent = (stuId) => {
-    setRecapStudentId(stuId);
+  const openRecapForStudent = (stuId, initDate = null, initPeriod = 0, initSubjId = null) => {
+    setRecapStudentId(stuId || currentStudent.id);
+    setRecapInitialDate(initDate || toDateStr());
+    setRecapInitialPeriod(initPeriod || 0);
+    setRecapInitialSubjectId(initSubjId || null);
     setRecapWizardOpen(true);
   };
 
@@ -589,6 +610,7 @@ function App() {
     subject_id,
     topicIdOrNew,
     newTopicTitle,
+    subtopicIdOrNew = 'NEW',
     subtopicTitle,
     comprehension,
     participation = '2',
@@ -596,29 +618,31 @@ function App() {
     minutes,
     notes,
     date,
+    session_id = null,
   }) => {
+    const sessDate = date || toDateStr();
     const compObj = COMPREHENSION_LEVELS.find((c) => c.id === comprehension) || COMPREHENSION_LEVELS[1];
-    const nextRecallDate = addDaysStr(toDateStr(), compObj.days);
+    const baseForRecall = sessDate > toDateStr() ? toDateStr() : sessDate;
+    const nextRecallDate = addDaysStr(baseForRecall, compObj.days);
     const now = Date.now();
     let targetTopicId = topicIdOrNew;
-    const newSubId = uid('subtop');
-
-    const newSubtopic = {
-      id: newSubId,
-      title: subtopicTitle.trim(),
-      comprehension,
-      next_recall_date: nextRecallDate,
-      interval_days: compObj.days,
-      notes: notes || '',
-      created_at: date || toDateStr(),
-      review_count: 0,
-      updated_at: now,
-    };
+    let targetSubId = subtopicIdOrNew && subtopicIdOrNew !== 'NEW' ? subtopicIdOrNew : uid('subtop');
 
     setAppData((prev) => {
       let updatedTopics = [...prev.topics];
       if (topicIdOrNew === 'NEW' || !topicIdOrNew) {
         targetTopicId = uid('top');
+        const newSubtopic = {
+          id: targetSubId,
+          title: subtopicTitle.trim(),
+          comprehension,
+          next_recall_date: nextRecallDate,
+          interval_days: compObj.days,
+          notes: notes || '',
+          created_at: sessDate,
+          review_count: 0,
+          updated_at: now,
+        };
         updatedTopics.unshift({
           id: targetTopicId,
           student_id,
@@ -630,33 +654,72 @@ function App() {
       } else {
         updatedTopics = updatedTopics.map((t) => {
           if (t.id !== topicIdOrNew) return t;
+          const existsSub = t.subtopics.some((st) => st.id === targetSubId);
+          let newSubs;
+          if (existsSub) {
+            newSubs = t.subtopics.map((st) =>
+              st.id !== targetSubId
+                ? st
+                : {
+                    ...st,
+                    title: subtopicTitle.trim() || st.title,
+                    comprehension,
+                    next_recall_date: nextRecallDate,
+                    interval_days: compObj.days,
+                    notes: notes !== undefined ? notes : st.notes,
+                    updated_at: now,
+                  }
+            );
+          } else {
+            newSubs = [
+              ...t.subtopics,
+              {
+                id: targetSubId,
+                title: subtopicTitle.trim(),
+                comprehension,
+                next_recall_date: nextRecallDate,
+                interval_days: compObj.days,
+                notes: notes || '',
+                created_at: sessDate,
+                review_count: 0,
+                updated_at: now,
+              },
+            ];
+          }
           return {
             ...t,
             updated_at: now,
-            subtopics: [...t.subtopics, newSubtopic],
+            subtopics: newSubs,
           };
         });
       }
 
+      const resolvedTopicObj = updatedTopics.find((t) => t.id === targetTopicId);
+      const resolvedSubObj = resolvedTopicObj?.subtopics.find((st) => st.id === targetSubId);
+      const finalSubTitle = resolvedSubObj ? resolvedSubObj.title : subtopicTitle.trim();
+
+      const targetSessId = session_id || `sess_${student_id}_${subject_id}_${sessDate}_${period_idx}`;
       const updatedLogs = [...prev.work_logs];
       if (Number(minutes) > 0) {
-        updatedLogs.unshift({
-          id: uid('log'),
+        const logId = `log_${targetSessId}`;
+        const existingLogIdx = updatedLogs.findIndex((l) => l.id === logId);
+        const logEntry = {
+          id: logId,
           student_id,
           subject_id,
           topic_id: targetTopicId,
-          subtopic_id: newSubId,
-          date: date || toDateStr(),
+          subtopic_id: targetSubId,
+          date: sessDate,
           minutes: Number(minutes),
-          note: notes ? `Recap: ${subtopicTitle}` : 'Estudio / Recap diario',
+          note: notes ? `Recap: ${finalSubTitle}` : `Recap: ${finalSubTitle}`,
           updated_at: now,
-        });
+        };
+        if (existingLogIdx >= 0) updatedLogs[existingLogIdx] = logEntry;
+        else updatedLogs.unshift(logEntry);
       }
 
-      const sessDate = date || toDateStr();
-      const resolvedTopicObj = updatedTopics.find((t) => t.id === targetTopicId);
       const newSess = {
-        id: `sess_${student_id}_${subject_id}_${sessDate}_${period_idx}`,
+        id: targetSessId,
         student_id,
         subject_id,
         date: sessDate,
@@ -664,9 +727,10 @@ function App() {
         status: 'normal',
         participation: participation || '2',
         topic_id: targetTopicId,
-        subtopic_id: newSubId,
+        subtopic_id: targetSubId,
         topic_title: resolvedTopicObj ? resolvedTopicObj.title : (newTopicTitle || ''),
-        subtopic_title: subtopicTitle.trim(),
+        subtopic_title: finalSubTitle,
+        minutes: Number(minutes) || 0,
         note: notes || '',
         updated_at: now,
       };
@@ -678,12 +742,12 @@ function App() {
         work_logs: updatedLogs,
         class_sessions: [
           newSess,
-          ...(prev.class_sessions || []).filter((s) => s.id !== newSess.id),
+          ...(prev.class_sessions || []).filter((s) => s.id !== targetSessId),
         ],
       };
     });
 
-    showToast(`✅ Recap y participación guardados (Recall en ${compObj.days}d)`);
+    showToast(`✅ Recap del ${formatHumanDate(sessDate)} guardado`);
   };
 
   const rateSubtopicRecall = ({ student_id, topic_id, subtopic_id, rating, minutesSpent }) => {
@@ -898,6 +962,7 @@ function App() {
             upsertTopicAndSubtopic={upsertTopicAndSubtopic}
             setQuickTimeModal={setQuickTimeModal}
             showToast={showToast}
+            openRecapForStudent={openRecapForStudent}
           />
         )}
 
@@ -921,6 +986,7 @@ function App() {
             getExamUrgencyInfo={getExamUrgencyInfo}
             showToast={showToast}
             setActiveTab={setActiveTab}
+            openRecapForStudent={openRecapForStudent}
           />
         )}
 
@@ -998,6 +1064,9 @@ function App() {
         <DailyRecapWizardModal
           appData={appData}
           studentId={recapStudentId}
+          initialDate={recapInitialDate}
+          initialPeriodIdx={recapInitialPeriod}
+          initialSubjectId={recapInitialSubjectId}
           onClose={() => setRecapWizardOpen(false)}
           upsertTopicAndSubtopic={upsertTopicAndSubtopic}
           recordClassSessionOnly={recordClassSessionOnly}
@@ -1376,16 +1445,57 @@ function EditProfilesAndSubjectsModal({ appData, setAppData, onClose, showToast 
             </button>
           </div>
 
-          {/* LISTA ACTUAL DE ASIGNATURAS */}
+          {/* LISTA ACTUAL DE ASIGNATURAS (EDITABLES EN NOMBRE E ICONO) */}
           <div>
-            <div className="text-xs font-bold text-slate-600 mb-2">Asignaturas actuales:</div>
-            <div className="space-y-1 max-h-36 overflow-y-auto">
+            <div className="text-xs font-bold text-slate-600 mb-2">
+              ✏️ Editar o borrar asignaturas existentes:
+            </div>
+            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
               {appData.subjects.map((subj) => {
                 const owner = appData.students.find((s) => s.id === subj.student_id);
                 return (
-                  <div key={subj.id} className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                    <span>{subj.icon} <strong>{subj.name}</strong> <span className="text-slate-400">({owner?.name})</span></span>
-                    <button onClick={() => handleDeleteSubject(subj.id)} className="text-red-500 hover:text-red-700 px-2 font-bold">✕</button>
+                  <div key={subj.id} className="flex items-center gap-1.5 p-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                    <input
+                      type="text"
+                      value={subj.icon}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAppData((prev) => ({
+                          ...prev,
+                          lastUpdated: Date.now(),
+                          subjects: prev.subjects.map((s) =>
+                            s.id === subj.id ? { ...s, icon: val, updated_at: Date.now() } : s
+                          ),
+                        }));
+                      }}
+                      className="w-9 text-center rounded-lg border border-slate-300 bg-white py-1 text-xs"
+                      title="Editar icono"
+                    />
+                    <input
+                      type="text"
+                      value={subj.name}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAppData((prev) => ({
+                          ...prev,
+                          lastUpdated: Date.now(),
+                          subjects: prev.subjects.map((s) =>
+                            s.id === subj.id ? { ...s, name: val, updated_at: Date.now() } : s
+                          ),
+                        }));
+                      }}
+                      className="flex-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-bold text-slate-800"
+                      title="Editar nombre de la asignatura"
+                    />
+                    <span className="text-[10px] text-slate-400 shrink-0">{owner?.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSubject(subj.id)}
+                      className="text-red-500 hover:text-red-700 px-1.5 font-bold"
+                      title="Eliminar asignatura"
+                    >
+                      🗑️
+                    </button>
                   </div>
                 );
               })}
@@ -1646,7 +1756,7 @@ function TodayAndParentDashboard({
                 return (
                   <div
                     key={`${subj.id}_${idx}`}
-                    onClick={() => openRecapForStudent(currentStudent.id)}
+                    onClick={() => openRecapForStudent(currentStudent.id, todayStr, idx, subj.id)}
                     className={`p-3 rounded-xl border cursor-pointer transition flex flex-col justify-between gap-2 ${
                       isStruckOut
                         ? 'bg-slate-100/90 border-dashed border-slate-300 opacity-80'
@@ -1748,91 +1858,911 @@ function TodayAndParentDashboard({
 }
 
 // ============================================================================
-// VISTA 2: TEMAS, SUBTEMAS Y TIEMPO
+// VISTA 2: GESTIÓN DE ASIGNATURAS Y ÁRBOL DE 3 NIVELES (TEMA -> SUBTEMA -> DESCRIPCIÓN)
 // ============================================================================
-function TopicsAndTasksView({ appData, currentStudent, setAppData, upsertTopicAndSubtopic, setQuickTimeModal, showToast }) {
-  const [subjectFilter, setSubjectFilter] = useState('ALL');
-  const [newTopicModalOpen, setNewTopicModalOpen] = useState(false);
-
+function TopicsAndTasksView({
+  appData,
+  currentStudent,
+  setAppData,
+  upsertTopicAndSubtopic,
+  setQuickTimeModal,
+  showToast,
+  openRecapForStudent,
+}) {
   const studentSubjects = appData.subjects.filter((s) => s.student_id === currentStudent.id);
-  const studentTopics = appData.topics.filter((t) => t.student_id === currentStudent.id)
-    .filter((t) => subjectFilter === 'ALL' || t.subject_id === subjectFilter);
+  const [selectedSubjectId, setSelectedSubjectId] = useState('ALL');
+
+  // Control de nodos abiertos del árbol: Nivel 1 (Temas) y Nivel 2 (Subtemas -> Nivel 3 Descripción)
+  const [openTopics, setOpenTopics] = useState({});
+  const [openSubtopics, setOpenSubtopics] = useState({});
+
+  // Estados de edición en línea / modales
+  const [editingSubject, setEditingSubject] = useState(null); // { id, name, icon } o { id: 'NEW', name: '', icon: '📘' }
+  const [editingTopic, setEditingTopic] = useState(null); // { id, subject_id, title } o { id: 'NEW', subject_id, title: '' }
+  const [editingSubtopic, setEditingSubtopic] = useState(null); // { topic_id, id, title, comprehension, notes }
+
+  const studentTopics = appData.topics
+    .filter((t) => t.student_id === currentStudent.id)
+    .filter((t) => selectedSubjectId === 'ALL' || t.subject_id === selectedSubjectId);
+
+  const isTopicOpen = (topicId) => openTopics[topicId] !== false; // Abierto por defecto
+  const toggleTopic = (topicId) =>
+    setOpenTopics((prev) => ({ ...prev, [topicId]: !isTopicOpen(topicId) }));
+
+  const isSubtopicOpen = (subId) => !!openSubtopics[subId];
+  const toggleSubtopic = (subId) =>
+    setOpenSubtopics((prev) => ({ ...prev, [subId]: !prev[subId] }));
+
+  // Guardar Asignatura (Nueva o Editada)
+  const handleSaveSubject = () => {
+    if (!editingSubject || !editingSubject.name.trim()) return;
+    const now = Date.now();
+    if (editingSubject.id === 'NEW') {
+      const newSub = {
+        id: uid('sub'),
+        student_id: currentStudent.id,
+        name: editingSubject.name.trim(),
+        icon: editingSubject.icon || '📘',
+        color: 'bg-indigo-600',
+        updated_at: now,
+      };
+      setAppData((prev) => ({
+        ...prev,
+        lastUpdated: now,
+        subjects: [...prev.subjects, newSub],
+      }));
+      setSelectedSubjectId(newSub.id);
+      showToast(`📚 Asignatura "${newSub.name}" creada`);
+    } else {
+      setAppData((prev) => ({
+        ...prev,
+        lastUpdated: now,
+        subjects: prev.subjects.map((s) =>
+          s.id === editingSubject.id
+            ? { ...s, name: editingSubject.name.trim(), icon: editingSubject.icon || '📘', updated_at: now }
+            : s
+        ),
+      }));
+      showToast('✏️ Asignatura actualizada');
+    }
+    setEditingSubject(null);
+  };
+
+  // Guardar Tema Principal (Nuevo o Editado)
+  const handleSaveTopic = () => {
+    if (!editingTopic || !editingTopic.title.trim()) return;
+    const now = Date.now();
+    const targetSubjId = editingTopic.subject_id || studentSubjects[0]?.id;
+    if (editingTopic.id === 'NEW') {
+      const newTop = {
+        id: uid('top'),
+        student_id: currentStudent.id,
+        subject_id: targetSubjId,
+        title: editingTopic.title.trim(),
+        updated_at: now,
+        subtopics: [],
+      };
+      setAppData((prev) => ({
+        ...prev,
+        lastUpdated: now,
+        topics: [newTop, ...prev.topics],
+      }));
+      showToast('📂 Tema Principal creado');
+    } else {
+      setAppData((prev) => ({
+        ...prev,
+        lastUpdated: now,
+        topics: prev.topics.map((t) =>
+          t.id === editingTopic.id
+            ? {
+                ...t,
+                title: editingTopic.title.trim(),
+                subject_id: targetSubjId,
+                updated_at: now,
+              }
+            : t
+        ),
+      }));
+      showToast('✏️ Tema Principal actualizado');
+    }
+    setEditingTopic(null);
+  };
+
+  const handleDeleteTopic = (topicId) => {
+    setAppData((prev) => ({
+      ...prev,
+      lastUpdated: Date.now(),
+      topics: prev.topics.filter((t) => t.id !== topicId),
+    }));
+    showToast('🗑️ Tema eliminado');
+  };
+
+  // Guardar Subtema y Descripción (Nuevo o Editado)
+  const handleSaveSubtopic = () => {
+    if (!editingSubtopic || !editingSubtopic.title.trim()) return;
+    const now = Date.now();
+    const compObj =
+      COMPREHENSION_LEVELS.find((c) => c.id === Number(editingSubtopic.comprehension)) ||
+      COMPREHENSION_LEVELS[2];
+
+    setAppData((prev) => ({
+      ...prev,
+      lastUpdated: now,
+      topics: prev.topics.map((t) => {
+        if (t.id !== editingSubtopic.topic_id) return t;
+        if (editingSubtopic.id === 'NEW') {
+          const newSub = {
+            id: uid('subtop'),
+            title: editingSubtopic.title.trim(),
+            comprehension: Number(editingSubtopic.comprehension) || 3,
+            next_recall_date: addDaysStr(toDateStr(), compObj.days),
+            interval_days: compObj.days,
+            notes: editingSubtopic.notes || '',
+            created_at: toDateStr(),
+            review_count: 0,
+            updated_at: now,
+          };
+          return {
+            ...t,
+            updated_at: now,
+            subtopics: [...t.subtopics, newSub],
+          };
+        } else {
+          return {
+            ...t,
+            updated_at: now,
+            subtopics: t.subtopics.map((st) =>
+              st.id !== editingSubtopic.id
+                ? st
+                : {
+                    ...st,
+                    title: editingSubtopic.title.trim(),
+                    comprehension: Number(editingSubtopic.comprehension) || st.comprehension,
+                    notes: editingSubtopic.notes,
+                    updated_at: now,
+                  }
+            ),
+          };
+        }
+      }),
+    }));
+    showToast('✅ Subtema y descripción guardados');
+    setEditingSubtopic(null);
+  };
+
+  const handleDeleteSubtopic = (topicId, subtopicId) => {
+    setAppData((prev) => ({
+      ...prev,
+      lastUpdated: Date.now(),
+      topics: prev.topics.map((t) =>
+        t.id !== topicId
+          ? t
+          : {
+              ...t,
+              updated_at: Date.now(),
+              subtopics: t.subtopics.filter((st) => st.id !== subtopicId),
+            }
+      ),
+    }));
+    showToast('🗑️ Subtema eliminado');
+  };
+
+  const updateSubtopicFieldInline = (topicId, subtopicId, patch) => {
+    const now = Date.now();
+    setAppData((prev) => ({
+      ...prev,
+      lastUpdated: now,
+      topics: prev.topics.map((t) =>
+        t.id !== topicId
+          ? t
+          : {
+              ...t,
+              updated_at: now,
+              subtopics: t.subtopics.map((st) =>
+                st.id !== subtopicId ? st : { ...st, ...patch, updated_at: now }
+              ),
+            }
+      ),
+    }));
+  };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2 bg-white p-3 rounded-2xl border border-slate-200">
-        <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
-          <button
-            onClick={() => setSubjectFilter('ALL')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 ${subjectFilter === 'ALL' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}
-          >
-            Todas
-          </button>
-          {studentSubjects.map((s) => (
+      {/* =====================================================================
+          CABECERA Y TARJETAS DE ASIGNATURAS (ACCESIBLES Y EDITABLES)
+         ===================================================================== */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <span className="text-[11px] font-extrabold uppercase text-indigo-600">
+              📚 Gestión de Asignaturas y Temario • {currentStudent.avatar} {currentStudent.name}
+            </span>
+            <h2 className="font-black text-base text-slate-900">
+              Árbol de Asignaturas ➔ Temas ➔ Subtemas ➔ Descripción
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-1.5">
             <button
-              key={s.id}
-              onClick={() => setSubjectFilter(s.id)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 flex items-center gap-1 ${subjectFilter === s.id ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-700'}`}
+              onClick={() =>
+                setEditingSubject({ id: 'NEW', name: '', icon: '📘' })
+              }
+              className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1"
             >
-              <span>{s.icon}</span>
-              <span>{s.name}</span>
+              <Plus className="w-3.5 h-3.5" /> Asignatura
             </button>
-          ))}
+            <button
+              onClick={() =>
+                setEditingTopic({
+                  id: 'NEW',
+                  subject_id:
+                    selectedSubjectId === 'ALL'
+                      ? studentSubjects[0]?.id || ''
+                      : selectedSubjectId,
+                  title: '',
+                })
+              }
+              className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1 shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" /> Nuevo Tema
+            </button>
+          </div>
         </div>
-        <button
-          onClick={() => setNewTopicModalOpen(true)}
-          className="px-3 py-1.5 rounded-xl bg-indigo-600 text-white text-xs font-bold shrink-0"
-        >
-          + Tema
-        </button>
-      </div>
 
-      <div className="space-y-3">
-        {studentTopics.map((topic) => {
-          const subj = appData.subjects.find((s) => s.id === topic.subject_id);
-          return (
-            <div key={topic.id} className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-indigo-600">{subj?.icon} {subj?.name}</span>
-                  <h3 className="font-extrabold text-sm sm:text-base text-slate-900">{topic.title}</h3>
-                </div>
-                <button
-                  onClick={() => setQuickTimeModal({ student_id: currentStudent.id, subject_id: topic.subject_id, topic_id: topic.id, title: topic.title })}
-                  className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-200"
-                >
-                  ⏱️ +Tiempo
-                </button>
-              </div>
-
-              <div className="divide-y divide-slate-100 pt-1">
-                {topic.subtopics.map((st) => {
-                  const comp = COMPREHENSION_LEVELS.find((c) => c.id === st.comprehension) || COMPREHENSION_LEVELS[1];
-                  return (
-                    <div key={st.id} className="py-2 flex items-center justify-between text-xs gap-2">
-                      <div>
-                        <div className="font-bold text-slate-800">{st.title}</div>
-                        {st.notes && <div className="text-slate-500 italic text-[11px] mt-0.5">💡 {st.notes}</div>}
-                      </div>
-                      <span className={`px-2 py-0.5 rounded-full border text-[11px] font-bold shrink-0 ${comp.badgeClass}`}>
-                        {comp.emoji} {comp.short}
-                      </span>
-                    </div>
-                  );
-                })}
+        {/* Tarjetas de Asignaturas con botón ✏️ para editarlas */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 pt-1">
+          <button
+            onClick={() => setSelectedSubjectId('ALL')}
+            className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between ${
+              selectedSubjectId === 'ALL'
+                ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+            }`}
+          >
+            <div className="text-base">🗂️</div>
+            <div className="mt-1">
+              <div className="font-extrabold text-xs">Todas</div>
+              <div className="text-[10px] opacity-75">
+                {appData.topics.filter((t) => t.student_id === currentStudent.id).length} temas
               </div>
             </div>
-          );
-        })}
+          </button>
+
+          {studentSubjects.map((subj) => {
+            const subjTopics = appData.topics.filter(
+              (t) => t.student_id === currentStudent.id && t.subject_id === subj.id
+            );
+            const subjSubtopicsCount = subjTopics.reduce(
+              (acc, t) => acc + (t.subtopics?.length || 0),
+              0
+            );
+            const isSelected = selectedSubjectId === subj.id;
+
+            return (
+              <div
+                key={subj.id}
+                onClick={() => setSelectedSubjectId(subj.id)}
+                className={`p-2.5 rounded-xl border cursor-pointer transition flex flex-col justify-between relative ${
+                  isSelected
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm ring-2 ring-indigo-300'
+                    : 'bg-slate-50 text-slate-800 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-lg leading-none">{subj.icon}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingSubject({ id: subj.id, name: subj.name, icon: subj.icon });
+                    }}
+                    className={`p-1 rounded-lg text-[10px] font-bold ${
+                      isSelected
+                        ? 'bg-white/20 text-white hover:bg-white/30'
+                        : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
+                    }`}
+                    title="Editar nombre e icono de la asignatura"
+                  >
+                    ✏️
+                  </button>
+                </div>
+                <div className="mt-1.5">
+                  <div className="font-extrabold text-xs truncate">{subj.name}</div>
+                  <div className={`text-[10px] ${isSelected ? 'text-indigo-100' : 'text-slate-500'}`}>
+                    {subjTopics.length} tema(s) · {subjSubtopicsCount} sub.
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {newTopicModalOpen && (
-        <DailyRecapWizardModal
-          appData={appData}
-          studentId={currentStudent.id}
-          onClose={() => setNewTopicModalOpen(false)}
-          upsertTopicAndSubtopic={upsertTopicAndSubtopic}
-        />
+      {/* =====================================================================
+          ÁRBOL DE 3 NIVELES:
+          NIVEL 1 (TEMA PRINCIPAL) -> NIVEL 2 (SUBTEMAS) -> NIVEL 3 (DESCRIPCIÓN Y FECHAS)
+         ===================================================================== */}
+      {studentTopics.length === 0 ? (
+        <div className="bg-white rounded-2xl p-8 text-center border border-slate-200 space-y-2">
+          <div className="text-2xl">📂</div>
+          <p className="text-sm font-bold text-slate-800">
+            No hay temas registrados en esta asignatura todavía
+          </p>
+          <p className="text-xs text-slate-500">
+            Crea un tema con el botón superior o registra lo visto en clase con el Recap.
+          </p>
+          <button
+            onClick={() =>
+              setEditingTopic({
+                id: 'NEW',
+                subject_id:
+                  selectedSubjectId === 'ALL'
+                    ? studentSubjects[0]?.id || ''
+                    : selectedSubjectId,
+                title: '',
+              })
+            }
+            className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow-sm"
+          >
+            + Crear Primer Tema Principal
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {studentTopics.map((topic) => {
+            const subj = appData.subjects.find((s) => s.id === topic.subject_id);
+            const topicOpen = isTopicOpen(topic.id);
+            const topicMinutes = appData.work_logs
+              .filter((l) => l.topic_id === topic.id)
+              .reduce((a, b) => a + b.minutes, 0);
+
+            return (
+              <div
+                key={topic.id}
+                className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
+              >
+                {/* NIVEL 1 DEL ÁRBOL: CABECERA DEL TEMA PRINCIPAL */}
+                <div className="p-3.5 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div
+                    onClick={() => toggleTopic(topic.id)}
+                    className="cursor-pointer flex items-start gap-2 flex-1 min-w-0"
+                  >
+                    <button
+                      type="button"
+                      className="mt-0.5 p-1 rounded-lg bg-white border border-slate-200 text-slate-600 shrink-0"
+                    >
+                      {topicOpen ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )}
+                    </button>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800">
+                          {subj?.icon} {subj?.name}
+                        </span>
+                        <span className="text-[11px] text-slate-500 font-semibold">
+                          • {topic.subtopics.length} subtema(s)
+                        </span>
+                        {topicMinutes > 0 && (
+                          <span className="text-[11px] text-emerald-700 font-bold">
+                            • ⏱️ {formatMinutes(topicMinutes)}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="font-extrabold text-sm sm:text-base text-slate-900 mt-1 break-words">
+                        📂 {topic.title}
+                      </h3>
+                    </div>
+                  </div>
+
+                  {/* Botones de edición del Tema Principal (Nivel 1) */}
+                  <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditingSubtopic({
+                          topic_id: topic.id,
+                          id: 'NEW',
+                          title: '',
+                          comprehension: 3,
+                          notes: '',
+                        })
+                      }
+                      className="px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1 shadow-2xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Subtema
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditingTopic({
+                          id: topic.id,
+                          subject_id: topic.subject_id,
+                          title: topic.title,
+                        })
+                      }
+                      className="p-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold"
+                      title="Editar Tema Principal"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setQuickTimeModal({
+                          student_id: currentStudent.id,
+                          subject_id: topic.subject_id,
+                          topic_id: topic.id,
+                          title: topic.title,
+                        })
+                      }
+                      className="px-2 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold"
+                      title="Añadir tiempo a este tema"
+                    >
+                      ⏱️
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTopic(topic.id)}
+                      className="p-1.5 rounded-xl bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 text-xs font-bold"
+                      title="Borrar Tema Principal"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+
+                {/* NIVEL 2 DEL ÁRBOL: LISTA DE SUBTEMAS DENTRO DEL TEMA */}
+                {topicOpen && (
+                  <div className="divide-y divide-slate-100">
+                    {topic.subtopics.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400 italic">
+                        Este tema aún no tiene subtemas. Pulsa "+ Subtema" para añadir uno.
+                      </div>
+                    ) : (
+                      topic.subtopics.map((st, stIdx) => {
+                        const comp =
+                          COMPREHENSION_LEVELS.find((c) => c.id === st.comprehension) ||
+                          COMPREHENSION_LEVELS[1];
+                        const subOpen = isSubtopicOpen(st.id);
+
+                        // Fechas del calendario en las que se vio o repasó este subtema
+                        const subSessions = (appData.class_sessions || []).filter(
+                          (s) =>
+                            s.subtopic_id === st.id ||
+                            (s.topic_id === topic.id && s.subtopic_title === st.title)
+                        );
+                        const subLogs = (appData.work_logs || []).filter(
+                          (l) => l.subtopic_id === st.id
+                        );
+                        const subMinutes = subLogs.reduce((a, b) => a + b.minutes, 0);
+
+                        return (
+                          <div key={st.id} className="bg-white">
+                            {/* Fila Nivel 2: Subtema */}
+                            <div className="p-3 pl-5 hover:bg-slate-50/80 transition flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                              <div
+                                onClick={() => toggleSubtopic(st.id)}
+                                className="cursor-pointer flex items-start gap-2 flex-1 min-w-0"
+                              >
+                                <button
+                                  type="button"
+                                  className="mt-0.5 p-1 rounded-md bg-slate-100 text-slate-600 shrink-0"
+                                  title="Abrir Nivel 3: Descripción y apuntes"
+                                >
+                                  {subOpen ? (
+                                    <ChevronDown className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-xs font-extrabold text-slate-900">
+                                      {stIdx + 1}. {st.title}
+                                    </span>
+                                    <span
+                                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${comp.badgeClass}`}
+                                    >
+                                      {comp.emoji} {comp.short}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5 flex-wrap">
+                                    <span className="text-indigo-600 font-semibold">
+                                      {subOpen
+                                        ? '▾ Ocultar descripción'
+                                        : st.notes
+                                        ? `▸ 📝 Ver descripción: "${st.notes.slice(0, 45)}${st.notes.length > 45 ? '...' : ''}"`
+                                        : '▸ 📝 Añadir descripción / apuntes'}
+                                    </span>
+                                    {subMinutes > 0 && (
+                                      <span>• ⏱️ {formatMinutes(subMinutes)}</span>
+                                    )}
+                                    {st.created_at && (
+                                      <span>• Visto: {formatHumanDate(st.created_at)}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Controles rápidos Nivel 2: Comprensión, Editar, +Tiempo, Borrar */}
+                              <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                                <select
+                                  value={st.comprehension}
+                                  onChange={(e) => {
+                                    const newComp = Number(e.target.value);
+                                    const lvl = COMPREHENSION_LEVELS.find((c) => c.id === newComp);
+                                    updateSubtopicFieldInline(topic.id, st.id, {
+                                      comprehension: newComp,
+                                      next_recall_date: addDaysStr(toDateStr(), lvl?.days || 3),
+                                    });
+                                    showToast(`Nivel actualizado a ${lvl?.short}`);
+                                  }}
+                                  className="text-[11px] border border-slate-200 rounded-lg px-2 py-1 bg-slate-50 font-bold text-slate-700"
+                                >
+                                  {COMPREHENSION_LEVELS.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                      {c.emoji} {c.short}
+                                    </option>
+                                  ))}
+                                </select>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setEditingSubtopic({
+                                      topic_id: topic.id,
+                                      id: st.id,
+                                      title: st.title,
+                                      comprehension: st.comprehension,
+                                      notes: st.notes || '',
+                                    })
+                                  }
+                                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold"
+                                  title="Editar Subtema y Descripción"
+                                >
+                                  ✏️
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setQuickTimeModal({
+                                      student_id: currentStudent.id,
+                                      subject_id: topic.subject_id,
+                                      topic_id: topic.id,
+                                      subtopic_id: st.id,
+                                      title: st.title,
+                                    })
+                                  }
+                                  className="px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold"
+                                  title="Añadir tiempo a este subtema"
+                                >
+                                  ⏱️
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSubtopic(topic.id, st.id)}
+                                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-rose-100 text-rose-600 text-xs font-bold"
+                                  title="Borrar Subtema"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* NIVEL 3 DEL ÁRBOL: DESCRIPCIÓN EDITABLE + HISTORIAL DE FECHAS EN CALENDARIO */}
+                            {subOpen && (
+                              <div className="ml-8 mr-3 mb-3 p-3.5 rounded-xl bg-amber-50/60 border border-amber-200 space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-extrabold uppercase text-amber-900">
+                                    📝 Nivel 3 • Descripción, Fórmulas y Apuntes del Subtema
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setEditingSubtopic({
+                                        topic_id: topic.id,
+                                        id: st.id,
+                                        title: st.title,
+                                        comprehension: st.comprehension,
+                                        notes: st.notes || '',
+                                      })
+                                    }
+                                    className="text-[11px] font-bold text-indigo-700 hover:underline"
+                                  >
+                                    ✏️ Abrir editor completo
+                                  </button>
+                                </div>
+
+                                {/* Editor directo en línea de la Descripción */}
+                                <div className="space-y-1.5">
+                                  <textarea
+                                    value={st.notes || ''}
+                                    onChange={(e) =>
+                                      updateSubtopicFieldInline(topic.id, st.id, {
+                                        notes: e.target.value,
+                                      })
+                                    }
+                                    rows={3}
+                                    placeholder="Escribe aquí la descripción detallada, explicación del profesor, fórmulas o ejemplos que entran en el examen..."
+                                    className="w-full rounded-xl border border-amber-300 bg-white p-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  />
+                                  <div className="flex items-center justify-between text-[10px] text-slate-500">
+                                    <span>
+                                      💡 Se guarda automáticamente al escribir (y sirve de chuleta en Active Recall).
+                                    </span>
+                                    <span>
+                                      Próximo Recall: <strong>{formatHumanDate(st.next_recall_date)}</strong>
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Fechas del calendario en que se estudió este subtema */}
+                                {(subSessions.length > 0 || subLogs.length > 0) && (
+                                  <div className="pt-2 border-t border-amber-200/80 space-y-1">
+                                    <div className="text-[10px] font-extrabold uppercase text-slate-500">
+                                      📅 Fechas asociadas en el calendario:
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {subSessions.map((sess) => {
+                                        const pObj = PARTICIPATION_LEVELS.find(
+                                          (p) => p.id === String(sess.participation)
+                                        );
+                                        return (
+                                          <button
+                                            key={sess.id}
+                                            type="button"
+                                            onClick={() =>
+                                              openRecapForStudent &&
+                                              openRecapForStudent(
+                                                currentStudent.id,
+                                                sess.date,
+                                                sess.period_idx || 0,
+                                                sess.subject_id
+                                              )
+                                            }
+                                            className="px-2 py-1 rounded-lg bg-white border border-slate-200 text-[11px] font-semibold text-slate-700 hover:border-indigo-400 flex items-center gap-1"
+                                            title="Toca para editar el Recap de ese día"
+                                          >
+                                            <span>🗓️ {formatHumanDate(sess.date)}</span>
+                                            {pObj && pObj.id !== 'na' && (
+                                              <span>• {pObj.emoji} Nota {pObj.id}</span>
+                                            )}
+                                            <span className="text-indigo-600">✏️</span>
+                                          </button>
+                                        );
+                                      })}
+                                      {subLogs.map((lg) => (
+                                        <span
+                                          key={lg.id}
+                                          className="px-2 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-[11px] font-semibold text-indigo-800"
+                                        >
+                                          ⏱️ {formatHumanDate(lg.date)}: +{lg.minutes}m
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* MODAL EDITAR / CREAR ASIGNATURA */}
+      {editingSubject && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="font-bold text-sm">
+                {editingSubject.id === 'NEW' ? '➕ Nueva Asignatura' : '✏️ Editar Asignatura'}
+              </h3>
+              <button onClick={() => setEditingSubject(null)} className="text-slate-400">
+                ✕
+              </button>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">Icono:</label>
+                <input
+                  type="text"
+                  value={editingSubject.icon}
+                  onChange={(e) =>
+                    setEditingSubject({ ...editingSubject, icon: e.target.value })
+                  }
+                  className="w-full rounded-xl border border-slate-300 p-2 text-center text-base"
+                />
+              </div>
+              <div className="col-span-3">
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                  Nombre de la Asignatura:
+                </label>
+                <input
+                  type="text"
+                  value={editingSubject.name}
+                  onChange={(e) =>
+                    setEditingSubject({ ...editingSubject, name: e.target.value })
+                  }
+                  placeholder="Ej. Mathematik, Physik..."
+                  className="w-full rounded-xl border border-slate-300 p-2 text-xs font-bold"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setEditingSubject(null)}
+                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveSubject}
+                className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow"
+              >
+                Guardar Asignatura
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDITAR / CREAR TEMA PRINCIPAL (NIVEL 1) */}
+      {editingTopic && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="font-bold text-sm">
+                {editingTopic.id === 'NEW' ? '📂 Nuevo Tema Principal' : '✏️ Editar Tema Principal'}
+              </h3>
+              <button onClick={() => setEditingTopic(null)} className="text-slate-400">
+                ✕
+              </button>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Asignatura:</label>
+              <select
+                value={editingTopic.subject_id}
+                onChange={(e) =>
+                  setEditingTopic({ ...editingTopic, subject_id: e.target.value })
+                }
+                className="w-full rounded-xl border border-slate-300 p-2 text-xs font-bold"
+              >
+                {studentSubjects.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.icon} {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Título del Tema Principal:
+              </label>
+              <input
+                type="text"
+                value={editingTopic.title}
+                onChange={(e) =>
+                  setEditingTopic({ ...editingTopic, title: e.target.value })
+                }
+                placeholder="Ej. Bruchrechnung (Fracciones)"
+                className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-bold"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setEditingTopic(null)}
+                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveTopic}
+                className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow"
+              >
+                Guardar Tema
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL EDITAR / CREAR SUBTEMA Y DESCRIPCIÓN (NIVELES 2 Y 3) */}
+      {editingSubtopic && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h3 className="font-bold text-sm">
+                {editingSubtopic.id === 'NEW'
+                  ? '➕ Añadir Subtema y Descripción'
+                  : '✏️ Editar Subtema y Descripción'}
+              </h3>
+              <button onClick={() => setEditingSubtopic(null)} className="text-slate-400">
+                ✕
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Título del Subtema (Nivel 2):
+              </label>
+              <input
+                type="text"
+                value={editingSubtopic.title}
+                onChange={(e) =>
+                  setEditingSubtopic({ ...editingSubtopic, title: e.target.value })
+                }
+                placeholder="Ej. Suma de fracciones con distinto denominador"
+                className="w-full rounded-xl border border-slate-300 p-2 text-xs font-bold"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Nivel de comprensión actual:
+              </label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {COMPREHENSION_LEVELS.map((lvl) => (
+                  <button
+                    key={lvl.id}
+                    type="button"
+                    onClick={() =>
+                      setEditingSubtopic({ ...editingSubtopic, comprehension: lvl.id })
+                    }
+                    className={`p-2 rounded-xl border text-xs font-bold text-left ${
+                      Number(editingSubtopic.comprehension) === lvl.id
+                        ? 'ring-2 ring-indigo-600 bg-indigo-50 border-indigo-500'
+                        : 'bg-slate-50 border-slate-200'
+                    }`}
+                  >
+                    {lvl.emoji} {lvl.short}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                📝 Descripción / Explicación / Fórmulas (Nivel 3):
+              </label>
+              <textarea
+                value={editingSubtopic.notes}
+                onChange={(e) =>
+                  setEditingSubtopic({ ...editingSubtopic, notes: e.target.value })
+                }
+                rows={4}
+                placeholder="Apuntes, explicación del profesor, trucos o ejemplos..."
+                className="w-full rounded-xl border border-slate-300 p-2.5 text-xs"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setEditingSubtopic(null)}
+                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveSubtopic}
+                className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold shadow"
+              >
+                Guardar Subtema
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1928,6 +2858,7 @@ function ExamsAndGermanGradesView({
   getExamUrgencyInfo,
   showToast,
   setActiveTab,
+  openRecapForStudent,
 }) {
   // Vista activa: 'calendar' (Tabla mensual) | 'list' (Lista y expediente)
   const [viewMode, setViewMode] = useState('calendar');
@@ -1964,6 +2895,12 @@ function ExamsAndGermanGradesView({
   const filteredTasks = useMemo(() => {
     return (appData.tasks || []).filter((t) => visibleStudentIds.includes(t.student_id));
   }, [appData.tasks, visibleStudentIds]);
+
+  const filteredSessions = useMemo(() => {
+    return (appData.class_sessions || [])
+      .filter((s) => visibleStudentIds.includes(s.student_id))
+      .sort((a, b) => (a.period_idx || 0) - (b.period_idx || 0));
+  }, [appData.class_sessions, visibleStudentIds]);
 
   // Navegación de meses
   const goPrevMonth = () => {
@@ -2089,9 +3026,19 @@ function ExamsAndGermanGradesView({
           .replace('.', ',')
       : '—';
 
-  // Exámenes y deberes del día seleccionado en la tabla
+  // Exámenes, Recaps/clases y deberes del día seleccionado en la tabla
   const selectedDayExams = filteredExams.filter((e) => e.exam_date === selectedDate);
   const selectedDayTasks = filteredTasks.filter((t) => t.due_date === selectedDate);
+  const selectedDaySessions = filteredSessions.filter((s) => s.date === selectedDate);
+
+  const handleDeleteSession = (sessId) => {
+    setAppData((prev) => ({
+      ...prev,
+      lastUpdated: Date.now(),
+      class_sessions: (prev.class_sessions || []).filter((s) => s.id !== sessId),
+    }));
+    showToast('🗑️ Registro de clase eliminado');
+  };
 
   const handleDeleteExam = (examId) => {
     setAppData((prev) => ({
@@ -2255,6 +3202,7 @@ function ExamsAndGermanGradesView({
                 const dayPendingTasks = filteredTasks.filter(
                   (t) => t.due_date === cell.dateStr && !t.completed
                 );
+                const daySessions = filteredSessions.filter((s) => s.date === cell.dateStr);
 
                 return (
                   <div
@@ -2288,14 +3236,24 @@ function ExamsAndGermanGradesView({
                         {cell.dayNum}
                       </span>
 
-                      {dayPendingTasks.length > 0 && (
-                        <span
-                          className="text-[10px] font-bold px-1 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300"
-                          title={`${dayPendingTasks.length} deber(es) para entregar`}
-                        >
-                          📌{dayPendingTasks.length > 1 ? dayPendingTasks.length : ''}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-0.5">
+                        {daySessions.length > 0 && (
+                          <span
+                            className="text-[9px] font-extrabold px-1 py-0.2 rounded bg-indigo-50 text-indigo-700 border border-indigo-200"
+                            title={`${daySessions.length} clase(s) / Recap registrados este día`}
+                          >
+                            📝{daySessions.length}
+                          </span>
+                        )}
+                        {dayPendingTasks.length > 0 && (
+                          <span
+                            className="text-[10px] font-bold px-1 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-300"
+                            title={`${dayPendingTasks.length} deber(es) para entregar`}
+                          >
+                            📌{dayPendingTasks.length > 1 ? dayPendingTasks.length : ''}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Píldoras de Exámenes dentro de la casilla */}
@@ -2369,20 +3327,31 @@ function ExamsAndGermanGradesView({
                   📅 Día seleccionado en el calendario
                 </span>
                 <h4 className="font-black text-base text-slate-900">
-                  {formatHumanDate(selectedDate)}{' '}
-                  <span className="text-xs font-normal text-slate-500">
-                    ({selectedDate.split('-').reverse().join('.')})
+                  {getFullDayNameEs(selectedDate)}{' '}
+                  <span className="text-xs font-semibold text-indigo-600">
+                    ({formatHumanDate(selectedDate)})
                   </span>
                 </h4>
               </div>
 
-              <button
-                onClick={() => setCreateExamModalDate(selectedDate)}
-                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition"
-              >
-                <Plus className="w-4 h-4" />
-                <span>+ Añadir Examen este día</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() =>
+                    openRecapForStudent && openRecapForStudent(currentStudent.id, selectedDate, 0, null)
+                  }
+                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>✨ Hacer / Editar Recap de este día</span>
+                </button>
+                <button
+                  onClick={() => setCreateExamModalDate(selectedDate)}
+                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Añadir Examen</span>
+                </button>
+              </div>
             </div>
 
             {/* Exámenes de ese día */}
@@ -2512,6 +3481,135 @@ function ExamsAndGermanGradesView({
                 })}
               </div>
             )}
+
+            {/* ===============================================================
+                CLASES Y RECAP REGISTRADOS EN ESTE DÍA DEL CALENDARIO (EDITABLES)
+               =============================================================== */}
+            <div className="pt-3 border-t border-slate-100 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold uppercase text-slate-700 flex items-center gap-1.5">
+                  📝 Clases y Recap registrados este día ({selectedDaySessions.length}):
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    openRecapForStudent && openRecapForStudent(currentStudent.id, selectedDate, 0, null)
+                  }
+                  className="text-xs font-bold text-emerald-700 hover:underline"
+                >
+                  + Registrar / Editar clases de este día
+                </button>
+              </div>
+
+              {selectedDaySessions.length === 0 ? (
+                <div className="p-3 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-xs text-slate-500 flex items-center justify-between">
+                  <span>No hay Recap registrado en esta fecha todavía.</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openRecapForStudent && openRecapForStudent(currentStudent.id, selectedDate, 0, null)
+                    }
+                    className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold text-[11px]"
+                  >
+                    + Meter datos de este día
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {selectedDaySessions.map((sess) => {
+                    const subj = appData.subjects.find((s) => s.id === sess.subject_id);
+                    const stu = appData.students.find((s) => s.id === sess.student_id);
+                    const partObj = PARTICIPATION_LEVELS.find(
+                      (p) => p.id === String(sess.participation)
+                    );
+                    const isStruck = sess.status === 'vertretung' || sess.status === 'entfall';
+
+                    return (
+                      <div
+                        key={sess.id}
+                        className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                          isStruck
+                            ? 'bg-slate-100/80 border-dashed border-slate-300'
+                            : 'bg-emerald-50/40 border-emerald-200'
+                        }`}
+                      >
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">
+                              {(sess.period_idx || 0) + 1}ª hora
+                            </span>
+                            <span className="text-xs font-extrabold text-slate-900">
+                              {stu?.avatar} {subj?.icon} {subj?.name}
+                            </span>
+                            {sess.status === 'vertretung' && (
+                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                                🔄 Vertretung
+                              </span>
+                            )}
+                            {sess.status === 'entfall' && (
+                              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-slate-200 text-slate-700 border border-slate-300">
+                                🚫 Entfall
+                              </span>
+                            )}
+                            {partObj && partObj.id !== 'na' && (
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded border ${partObj.badgeClass}`}
+                              >
+                                🙋‍♂️ {partObj.emoji} {partObj.label} (Nota {partObj.id})
+                              </span>
+                            )}
+                          </div>
+
+                          {sess.status === 'normal' && (
+                            <div className="text-xs text-slate-800">
+                              <span className="font-bold text-indigo-900">
+                                📂 {sess.topic_title || 'Tema'}
+                              </span>{' '}
+                              ➔{' '}
+                              <span className="font-semibold">
+                                📄 {sess.subtopic_title || 'Subtema'}
+                              </span>
+                            </div>
+                          )}
+
+                          {sess.note && (
+                            <p className="text-[11px] text-slate-600 italic bg-white/80 px-2 py-1 rounded border border-slate-200/70">
+                              📝 {sess.note}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openRecapForStudent &&
+                              openRecapForStudent(
+                                sess.student_id,
+                                sess.date,
+                                sess.period_idx || 0,
+                                sess.subject_id
+                              )
+                            }
+                            className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold flex items-center gap-1"
+                          >
+                            ✏️ Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSession(sess.id)}
+                            className="p-1.5 rounded-lg bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 text-xs font-bold"
+                            title="Borrar registro de esta hora"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             {/* Deberes / Tareas que se entregan en el día seleccionado */}
             {selectedDayTasks.length > 0 && (
@@ -3429,25 +4527,40 @@ function StatsAndP2PSyncView({ appData, currentStudent, setAppData, showToast })
 
 
 // ============================================================================
-// MODAL RECAP DIARIO GUIADO (CON PARTICIPACIÓN 1-5 Y TACHADO DE VERTRETUNG / ENTFALL)
+// MODAL RECAP DIARIO Y DE DÍAS PASADOS (VINCULADO AL CALENDARIO Y EDITABLE)
 // ============================================================================
 function DailyRecapWizardModal({
   appData,
   studentId,
+  initialDate,
+  initialPeriodIdx = 0,
+  initialSubjectId = null,
   onClose,
   upsertTopicAndSubtopic,
   recordClassSessionOnly,
 }) {
   const student = appData.students.find((s) => s.id === studentId) || appData.students[0];
-  const jsDay = new Date().getDay();
-  const defaultWeekday = jsDay >= 1 && jsDay <= 5 ? jsDay : 1;
-  const [weekday, setWeekday] = useState(defaultWeekday);
+  const todayStr = toDateStr();
+  const yesterdayStr = addDaysStr(todayStr, -1);
+
+  // Fecha de la que se está haciendo o editando el Recap
+  const [recapDate, setRecapDate] = useState(initialDate || todayStr);
+  // Día de la semana (1=Lunes..5=Viernes) calculado automáticamente a partir de recapDate
+  const [weekday, setWeekday] = useState(() => getWeekdayFromDateStr(initialDate || todayStr));
+
+  // Cuando cambia recapDate, actualizar automáticamente el día de la semana del horario
+  const handleDateChange = (newDateStr) => {
+    if (!newDateStr) return;
+    setRecapDate(newDateStr);
+    setWeekday(getWeekdayFromDateStr(newDateStr));
+    setQueueIdx(0);
+  };
 
   const scheduledSubjectIds =
     (appData.schedules[student.id] && appData.schedules[student.id][weekday]) || [];
   const studentSubjects = appData.subjects.filter((s) => s.student_id === student.id);
 
-  // Construimos la cola de asignaturas del día según su horario escolar
+  // Cola de asignaturas del día según su horario escolar
   const dayQueue = useMemo(() => {
     if (scheduledSubjectIds.length > 0) {
       return scheduledSubjectIds
@@ -3460,42 +4573,118 @@ function DailyRecapWizardModal({
     return studentSubjects.map((s, idx) => ({ ...s, period_idx: idx }));
   }, [scheduledSubjectIds, studentSubjects]);
 
-  const [queueIdx, setQueueIdx] = useState(0);
-  const currentSlot = dayQueue[queueIdx] || dayQueue[0];
+  const [queueIdx, setQueueIdx] = useState(() => {
+    if (initialPeriodIdx !== undefined && initialPeriodIdx !== null) return initialPeriodIdx;
+    return 0;
+  });
 
-  // Estado del formulario para la asignatura actual
-  // sessionType: 'normal' | 'vertretung' | 'entfall'
-  const [sessionType, setSessionType] = useState('normal');
-  const [participation, setParticipation] = useState('2'); // '1' Muy alta, '2' Alta, '3' Normal, '5' Baja, 'na' No aplica
+  // Permitir también cambiar manualmente qué asignatura se registra en esta hora
+  const currentSlot = dayQueue[queueIdx] || dayQueue[0];
+  const [overrideSubjectId, setOverrideSubjectId] = useState(initialSubjectId || null);
+  const activeSubjectId = overrideSubjectId || currentSlot?.id || studentSubjects[0]?.id;
+  const activeSubjectObj =
+    studentSubjects.find((s) => s.id === activeSubjectId) || currentSlot;
+
+  // Buscar si ya existe un Recap guardado para este alumno + fecha + hora/asignatura
+  const existingSession = useMemo(() => {
+    const pIdx = currentSlot?.period_idx !== undefined ? currentSlot.period_idx : queueIdx;
+    return (
+      (appData.class_sessions || []).find(
+        (s) =>
+          s.student_id === student.id &&
+          s.date === recapDate &&
+          s.period_idx === pIdx &&
+          s.subject_id === activeSubjectId
+      ) ||
+      (appData.class_sessions || []).find(
+        (s) =>
+          s.student_id === student.id &&
+          s.date === recapDate &&
+          s.period_idx === pIdx
+      )
+    );
+  }, [appData.class_sessions, student.id, recapDate, currentSlot, queueIdx, activeSubjectId]);
 
   const existingTopicsForSubject = appData.topics.filter(
-    (t) => t.student_id === student.id && t.subject_id === currentSlot?.id
+    (t) => t.student_id === student.id && t.subject_id === activeSubjectId
   );
 
+  const [sessionType, setSessionType] = useState('normal');
+  const [participation, setParticipation] = useState('2');
   const [selectedTopicId, setSelectedTopicId] = useState(
     existingTopicsForSubject[0]?.id || 'NEW'
   );
   const [newTopicTitle, setNewTopicTitle] = useState('');
+  const [selectedSubtopicId, setSelectedSubtopicId] = useState('NEW');
   const [subtopicTitle, setSubtopicTitle] = useState('');
   const [comp, setComp] = useState(3);
   const [mins, setMins] = useState(20);
   const [notes, setNotes] = useState('');
 
+  // Cargar datos si ya existía un Recap en esa fecha y hora, o limpiar al cambiar de hora/fecha
   useEffect(() => {
     const topics = appData.topics.filter(
-      (t) => t.student_id === student.id && t.subject_id === currentSlot?.id
+      (t) => t.student_id === student.id && t.subject_id === activeSubjectId
     );
-    setSelectedTopicId(topics[0]?.id || 'NEW');
-    setNewTopicTitle('');
-    setSubtopicTitle('');
-    setSessionType('normal');
-    setParticipation('2');
-    setComp(3);
-    setMins(20);
-    setNotes('');
-  }, [queueIdx, weekday, currentSlot?.id]);
+    if (existingSession) {
+      setSessionType(existingSession.status || 'normal');
+      setParticipation(String(existingSession.participation || '2'));
+      if (existingSession.topic_id && topics.some((t) => t.id === existingSession.topic_id)) {
+        setSelectedTopicId(existingSession.topic_id);
+        const topObj = topics.find((t) => t.id === existingSession.topic_id);
+        const subObj = topObj?.subtopics.find((st) => st.id === existingSession.subtopic_id);
+        if (subObj) {
+          setSelectedSubtopicId(subObj.id);
+          setSubtopicTitle(subObj.title);
+          setComp(subObj.comprehension || 3);
+          setNotes(existingSession.note || subObj.notes || '');
+        } else {
+          setSelectedSubtopicId('NEW');
+          setSubtopicTitle(existingSession.subtopic_title || '');
+          setNotes(existingSession.note || '');
+        }
+      } else {
+        setSelectedTopicId(topics[0]?.id || 'NEW');
+        setNewTopicTitle(existingSession.topic_title || '');
+        setSelectedSubtopicId('NEW');
+        setSubtopicTitle(existingSession.subtopic_title || '');
+        setNotes(existingSession.note || '');
+      }
+      setMins(existingSession.minutes !== undefined ? existingSession.minutes : 20);
+    } else {
+      setSessionType('normal');
+      setParticipation('2');
+      setSelectedTopicId(topics[0]?.id || 'NEW');
+      setNewTopicTitle('');
+      setSelectedSubtopicId('NEW');
+      setSubtopicTitle('');
+      setComp(3);
+      setMins(20);
+      setNotes('');
+    }
+  }, [queueIdx, weekday, recapDate, activeSubjectId, existingSession?.id]);
+
+  // Subtemas disponibles dentro del Tema Principal seleccionado
+  const currentTopicObj = existingTopicsForSubject.find((t) => t.id === selectedTopicId);
+  const subtopicsOfSelectedTopic = currentTopicObj?.subtopics || [];
+
+  const handleSelectSubtopicOption = (subId) => {
+    setSelectedSubtopicId(subId);
+    if (subId === 'NEW') {
+      setSubtopicTitle('');
+      setNotes('');
+    } else {
+      const found = subtopicsOfSelectedTopic.find((s) => s.id === subId);
+      if (found) {
+        setSubtopicTitle(found.title);
+        setComp(found.comprehension || 3);
+        setNotes(found.notes || '');
+      }
+    }
+  };
 
   const advanceOrClose = () => {
+    setOverrideSubjectId(null);
     if (queueIdx < dayQueue.length - 1) {
       setQueueIdx(queueIdx + 1);
     } else {
@@ -3503,15 +4692,14 @@ function DailyRecapWizardModal({
     }
   };
 
-  // Tachado rápido en 1 toque cuando es Vertretung o Entfall
   const handleQuickVertretungOrEntfall = (statusType) => {
-    if (!currentSlot) return;
+    if (!activeSubjectObj) return;
     if (recordClassSessionOnly) {
       recordClassSessionOnly({
         student_id: student.id,
-        subject_id: currentSlot.id,
-        date: toDateStr(),
-        period_idx: currentSlot.period_idx || queueIdx,
+        subject_id: activeSubjectObj.id,
+        date: recapDate,
+        period_idx: currentSlot?.period_idx !== undefined ? currentSlot.period_idx : queueIdx,
         status: statusType,
         participation: statusType === 'entfall' ? 'na' : participation === '2' ? 'na' : participation,
         note: notes.trim(),
@@ -3521,7 +4709,7 @@ function DailyRecapWizardModal({
   };
 
   const handleSaveNormal = () => {
-    if (!currentSlot) return;
+    if (!activeSubjectObj) return;
     if (sessionType === 'vertretung' || sessionType === 'entfall') {
       handleQuickVertretungOrEntfall(sessionType);
       return;
@@ -3531,88 +4719,162 @@ function DailyRecapWizardModal({
       return;
     }
     if (!subtopicTitle.trim()) {
-      alert('Escribe qué subtema habéis visto hoy en clase (o marca arriba Vertretung si no dieron temario).');
+      alert('Escribe o selecciona qué Subtema habéis visto en esta clase.');
       return;
     }
 
     upsertTopicAndSubtopic({
       student_id: student.id,
-      subject_id: currentSlot.id,
+      subject_id: activeSubjectObj.id,
       topicIdOrNew: selectedTopicId,
       newTopicTitle: newTopicTitle.trim() || 'Tema General',
+      subtopicIdOrNew: selectedSubtopicId,
       subtopicTitle,
       comprehension: comp,
       participation,
-      period_idx: currentSlot.period_idx || queueIdx,
+      period_idx: currentSlot?.period_idx !== undefined ? currentSlot.period_idx : queueIdx,
       minutes: mins,
       notes,
-      date: toDateStr(),
+      date: recapDate,
+      session_id: existingSession?.id || null,
     });
     advanceOrClose();
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-3">
-      <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[92vh] flex flex-col overflow-hidden">
-        {/* Cabecera */}
-        <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300">
-              ✨ Recap Diario Guiado • {student.avatar} {student.name}
-            </span>
-            <h3 className="font-bold text-base">
-              {currentSlot ? `${queueIdx + 1}ª Hora: ${currentSlot.icon} ${currentSlot.name}` : 'Recap'}
-            </h3>
+      <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[94vh] flex flex-col overflow-hidden">
+        {/* CABECERA CON DÍA Y FECHA BIEN VISIBLES */}
+        <div className="p-4 bg-slate-900 text-white space-y-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block">
+                📅 Haciendo Recap del: {getFullDayNameEs(recapDate)} ({formatHumanDate(recapDate)})
+              </span>
+              <h3 className="font-extrabold text-base mt-0.5">
+                {student.avatar} {student.name} •{' '}
+                {activeSubjectObj
+                  ? `${queueIdx + 1}ª Hora: ${activeSubjectObj.icon} ${activeSubjectObj.name}`
+                  : 'Recap'}
+              </h3>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg bg-slate-800 text-slate-300 hover:text-white">
-            <X className="w-5 h-5" />
-          </button>
+
+          {/* SELECTOR DE FECHA (HOY / AYER / CUALQUIER DÍA PASADO) */}
+          <div className="flex flex-wrap items-center justify-between gap-1.5 pt-2 border-t border-slate-800">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => handleDateChange(todayStr)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                  recapDate === todayStr
+                    ? 'bg-indigo-600 text-white shadow'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                📅 Hoy
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDateChange(yesterdayStr)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
+                  recapDate === yesterdayStr
+                    ? 'bg-indigo-600 text-white shadow'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                ⏪ Ayer
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-slate-400">Otro día pasado:</span>
+              <input
+                type="date"
+                value={recapDate}
+                onChange={(e) => handleDateChange(e.target.value)}
+                className="rounded-lg bg-slate-800 border border-slate-700 text-white px-2 py-1 text-xs font-bold"
+              />
+            </div>
+          </div>
         </div>
 
         <div className="p-4 space-y-4 overflow-y-auto">
-          {/* Selector de día y barra de asignaturas del horario */}
-          <div>
-            <div className="flex items-center justify-between text-xs text-slate-500 mb-1.5">
-              <span>Asignaturas del horario escolar:</span>
+          {/* Aviso si estamos editando una clase que ya fue registrada */}
+          {existingSession && (
+            <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-300 text-indigo-950 text-xs font-bold flex items-center justify-between">
+              <span>✏️ Editando clase ya registrada el {formatHumanDate(recapDate)}</span>
+              <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-200 text-indigo-900">
+                Modo Edición
+              </span>
+            </div>
+          )}
+
+          {/* Barra de horas del horario de ese día + opción de cambiar asignatura */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span>
+                Horario del <strong>{WEEKDAYS.find((w) => w.key === weekday)?.name}</strong>:
+              </span>
               <select
-                value={weekday}
-                onChange={(e) => {
-                  setWeekday(Number(e.target.value));
-                  setQueueIdx(0);
-                }}
+                value={activeSubjectId}
+                onChange={(e) => setOverrideSubjectId(e.target.value)}
                 className="bg-slate-100 border border-slate-300 rounded-lg px-2 py-0.5 text-xs font-bold text-slate-800"
+                title="Cambiar asignatura de esta hora"
               >
-                {WEEKDAYS.map((w) => (
-                  <option key={w.key} value={w.key}>
-                    {w.name} ({w.de})
+                {studentSubjects.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    Asignatura: {s.icon} {s.name}
                   </option>
                 ))}
               </select>
             </div>
 
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-              {dayQueue.map((slot, idx) => (
-                <button
-                  key={`${slot.id}_${idx}`}
-                  type="button"
-                  onClick={() => setQueueIdx(idx)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 flex items-center gap-1 border transition ${
-                    idx === queueIdx
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                      : 'bg-slate-100 text-slate-600 border-slate-200'
-                  }`}
-                >
-                  <span>{idx + 1}. {slot.icon}</span>
-                  <span>{slot.name}</span>
-                </button>
-              ))}
+              {dayQueue.map((slot, idx) => {
+                const slotDone = (appData.class_sessions || []).some(
+                  (s) =>
+                    s.student_id === student.id &&
+                    s.date === recapDate &&
+                    s.period_idx === idx
+                );
+                return (
+                  <button
+                    key={`${slot.id}_${idx}`}
+                    type="button"
+                    onClick={() => {
+                      setOverrideSubjectId(null);
+                      setQueueIdx(idx);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 flex items-center gap-1 border transition ${
+                      idx === queueIdx
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                        : slotDone
+                        ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                        : 'bg-slate-100 text-slate-600 border-slate-200'
+                    }`}
+                  >
+                    <span>
+                      {slotDone ? '✓ ' : `${idx + 1}. `}
+                      {slot.icon}
+                    </span>
+                    <span>{slot.name}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* BOTONES DE ESTADO DE LA CLASE: NORMAL VS VERTRETUNG VS ENTFALL */}
+          {/* 1. TIPO DE CLASE: NORMAL VS VERTRETUNG VS ENTFALL */}
           <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
             <div className="text-[11px] font-extrabold uppercase text-slate-600">
-              1. ¿Hubo clase normal hoy o fue Vertretung / Cancelada?
+              1. ¿Hubo clase normal el {formatHumanDate(recapDate)} o fue Vertretung / Cancelada?
             </div>
             <div className="grid grid-cols-3 gap-1.5">
               <button
@@ -3650,12 +4912,11 @@ function DailyRecapWizardModal({
               </button>
             </div>
 
-            {/* Si elige Vertretung o Entfall: permite tachar directamente sin pedir temas */}
             {(sessionType === 'vertretung' || sessionType === 'entfall') && (
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 space-y-2.5 mt-2">
                 <div className="text-xs font-bold text-amber-950">
                   {sessionType === 'vertretung'
-                    ? '🔄 Sustitución (Vertretung): Quedará tachada en el horario de hoy sin tener que poner temas ni subtemas.'
+                    ? '🔄 Sustitución (Vertretung): Quedará tachada en esta fecha sin tener que poner temas ni subtemas.'
                     : '🚫 Clase cancelada (Entfall): Quedará tachada como hora libre y contará en las estadísticas.'}
                 </div>
                 <input
@@ -3671,8 +4932,8 @@ function DailyRecapWizardModal({
                   className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs shadow"
                 >
                   {sessionType === 'vertretung'
-                    ? '✓ Tachar como Vertretung y Pasar a Siguiente'
-                    : '✓ Tachar como Entfall y Pasar a Siguiente'}
+                    ? '✓ Guardar Vertretung y Pasar a Siguiente'
+                    : '✓ Guardar Entfall y Pasar a Siguiente'}
                 </button>
               </div>
             )}
@@ -3680,11 +4941,11 @@ function DailyRecapWizardModal({
 
           {sessionType === 'normal' && (
             <>
-              {/* PARTICIPACIÓN EN CLASE (MÜNDLICHE MITARBEIT: 1 A 5 + NO APLICA DISCRETO) */}
+              {/* 2. PARTICIPACIÓN EN CLASE (1 A 5 + NO APLICA) */}
               <div className="bg-emerald-50/50 border border-emerald-200 rounded-2xl p-3.5 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-extrabold uppercase text-emerald-950">
-                    2. 🙋‍♂️ Participación en clase hoy (Mündliche Mitarbeit):
+                    2. 🙋‍♂️ Participación en clase (Mündliche Mitarbeit):
                   </span>
                   <button
                     type="button"
@@ -3695,7 +4956,7 @@ function DailyRecapWizardModal({
                         : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    ⚪ No aplica hoy
+                    ⚪ No aplica
                   </button>
                 </div>
 
@@ -3708,7 +4969,9 @@ function DailyRecapWizardModal({
                         type="button"
                         onClick={() => setParticipation(p.id)}
                         className={`p-2 rounded-xl border text-center transition active:scale-95 ${
-                          active ? p.activeClass : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50'
+                          active
+                            ? p.activeClass
+                            : 'bg-white border-slate-200 text-slate-800 hover:bg-slate-50'
                         }`}
                       >
                         <div className="text-lg leading-none">{p.emoji}</div>
@@ -3722,19 +4985,24 @@ function DailyRecapWizardModal({
                 </div>
               </div>
 
-              {/* TEMA PRINCIPAL Y SUBTEMA VISTO HOY */}
+              {/* 3. ÁRBOL TEMA PRINCIPAL -> SUBTEMA -> DESCRIPCIÓN */}
               <div className="bg-indigo-50/60 border border-indigo-200 rounded-2xl p-3.5 space-y-2.5">
                 <div className="text-xs font-extrabold uppercase text-indigo-900">
-                  3. 📚 ¿Qué tema y subtema habéis visto hoy?
+                  3. 📚 Tema ➔ Subtema ➔ Descripción vistos en clase:
                 </div>
 
+                {/* Nivel 1: Tema Principal */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Tema Principal (Unidad):
+                    📂 Tema Principal (Nivel 1):
                   </label>
                   <select
                     value={selectedTopicId}
-                    onChange={(e) => setSelectedTopicId(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedTopicId(e.target.value);
+                      setSelectedSubtopicId('NEW');
+                      setSubtopicTitle('');
+                    }}
                     className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-bold"
                   >
                     {existingTopicsForSubject.map((t) => (
@@ -3756,64 +5024,92 @@ function DailyRecapWizardModal({
                       value={newTopicTitle}
                       onChange={(e) => setNewTopicTitle(e.target.value)}
                       placeholder="Ej. Fracciones (Bruchrechnung) o Fotosíntesis"
-                      className="w-full rounded-xl border border-indigo-300 bg-white p-2 text-xs"
+                      className="w-full rounded-xl border border-indigo-300 bg-white p-2 text-xs font-bold"
                     />
                   </div>
                 )}
 
+                {/* Nivel 2: Subtema (elegir existente o crear nuevo) */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Subtema concreto visto hoy:
+                    📄 Subtema (Nivel 2):
                   </label>
+                  {selectedTopicId !== 'NEW' && subtopicsOfSelectedTopic.length > 0 && (
+                    <select
+                      value={selectedSubtopicId}
+                      onChange={(e) => handleSelectSubtopicOption(e.target.value)}
+                      className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-semibold mb-1.5"
+                    >
+                      <option value="NEW">➕ Añadir un Subtema nuevo a este tema...</option>
+                      {subtopicsOfSelectedTopic.map((st) => (
+                        <option key={st.id} value={st.id}>
+                          ✏️ Existente: {st.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <input
                     type="text"
                     value={subtopicTitle}
                     onChange={(e) => setSubtopicTitle(e.target.value)}
-                    placeholder="Ej. Suma de fracciones con distinto denominador"
+                    placeholder="Nombre del subtema visto (ej. División por el Kehrwert)"
+                    className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs font-bold"
+                  />
+                </div>
+
+                {/* Nivel 3: Descripción / Explicación / Apuntes */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    📝 Descripción / Explicación / Fórmulas (Nivel 3):
+                  </label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={2}
+                    placeholder="Explicación de clase, fórmulas, ejemplos o pistas para el examen..."
                     className="w-full rounded-xl border border-slate-300 bg-white p-2 text-xs"
                   />
                 </div>
               </div>
 
-              {/* NIVEL DE COMPRENSIÓN */}
-              <div>
-                <label className="block text-xs font-extrabold uppercase text-slate-700 mb-1.5">
-                  4. 🧠 ¿Cómo de bien lo has entendido hoy?
-                </label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {COMPREHENSION_LEVELS.map((lvl) => (
-                    <button
-                      key={lvl.id}
-                      type="button"
-                      onClick={() => setComp(lvl.id)}
-                      className={`p-2 rounded-xl border text-xs font-bold text-left flex items-center justify-between ${
-                        comp === lvl.id
-                          ? 'ring-2 ring-indigo-600 bg-indigo-50 border-indigo-500'
-                          : 'bg-slate-50 border-slate-200'
-                      }`}
-                    >
-                      <span>
-                        {lvl.emoji} {lvl.short}
-                      </span>
-                      <span className="text-[10px] text-slate-400">{lvl.days}d</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* TIEMPO Y NOTA CLAVE */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {/* 4. COMPRENSIÓN Y TIEMPO */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    ⏱️ Tiempo de repaso hoy:
+                  <label className="block text-xs font-extrabold uppercase text-slate-700 mb-1.5">
+                    4. 🧠 Nivel de comprensión:
                   </label>
-                  <div className="flex items-center gap-1">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {COMPREHENSION_LEVELS.map((lvl) => (
+                      <button
+                        key={lvl.id}
+                        type="button"
+                        onClick={() => setComp(lvl.id)}
+                        className={`p-2 rounded-xl border text-xs font-bold text-left flex items-center justify-between ${
+                          comp === lvl.id
+                            ? 'ring-2 ring-indigo-600 bg-indigo-50 border-indigo-500'
+                            : 'bg-slate-50 border-slate-200'
+                        }`}
+                      >
+                        <span>
+                          {lvl.emoji} {lvl.short}
+                        </span>
+                        <span className="text-[10px] text-slate-400">{lvl.days}d</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-extrabold uppercase text-slate-700 mb-1.5">
+                    ⏱️ Tiempo de estudio ese día:
+                  </label>
+                  <div className="grid grid-cols-4 gap-1">
                     {[0, 15, 30, 45].map((m) => (
                       <button
                         key={m}
                         type="button"
                         onClick={() => setMins(m)}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold border ${
+                        className={`py-2 rounded-xl text-xs font-bold border ${
                           mins === m
                             ? 'bg-slate-900 text-white border-slate-900'
                             : 'bg-slate-100 text-slate-700 border-slate-200'
@@ -3823,18 +5119,6 @@ function DailyRecapWizardModal({
                       </button>
                     ))}
                   </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    💡 Pista o nota del profesor:
-                  </label>
-                  <input
-                    type="text"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Fórmula o clave dicha en clase"
-                    className="w-full rounded-xl border border-slate-300 p-1.5 text-xs"
-                  />
                 </div>
               </div>
             </>
@@ -3846,7 +5130,10 @@ function DailyRecapWizardModal({
           {queueIdx < dayQueue.length - 1 ? (
             <button
               type="button"
-              onClick={() => setQueueIdx(queueIdx + 1)}
+              onClick={() => {
+                setOverrideSubjectId(null);
+                setQueueIdx(queueIdx + 1);
+              }}
               className="px-3 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-600 text-xs font-bold"
             >
               Saltar hora →
@@ -3868,8 +5155,8 @@ function DailyRecapWizardModal({
           >
             {sessionType === 'normal'
               ? queueIdx < dayQueue.length - 1
-                ? 'Guardar y Siguiente Hora →'
-                : 'Guardar y Terminar Recap'
+                ? `Guardar (${formatHumanDate(recapDate)}) y Siguiente Hora →`
+                : `Guardar Recap (${formatHumanDate(recapDate)})`
               : '✓ Confirmar Tachado'}
           </button>
         </div>
@@ -3879,21 +5166,92 @@ function DailyRecapWizardModal({
 }
 
 // ============================================================================
-// MODAL +TIEMPO
+// MODAL +TIEMPO (CON SELECTOR DE FECHA PARA HOY, AYER O DÍAS PASADOS)
 // ============================================================================
 function QuickAddTimeModal({ target, onClose, onSave }) {
+  const today = toDateStr();
+  const yesterday = addDaysStr(today, -1);
   const [mins, setMins] = useState(30);
+  const [dateStr, setDateStr] = useState(today);
+  const [note, setNote] = useState('');
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-sm rounded-2xl p-4 shadow-xl space-y-3">
-        <h3 className="font-bold text-sm">⏱️ +Tiempo en {target.title}</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-sm truncate pr-2">⏱️ +Tiempo en {target.title}</h3>
+          <button onClick={onClose} className="text-slate-400">✕</button>
+        </div>
+
+        <div>
+          <label className="block text-xs font-bold text-slate-700 mb-1">Fecha del estudio:</label>
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <button
+              type="button"
+              onClick={() => setDateStr(today)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                dateStr === today ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100'
+              }`}
+            >
+              Hoy
+            </button>
+            <button
+              type="button"
+              onClick={() => setDateStr(yesterday)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${
+                dateStr === yesterday ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100'
+              }`}
+            >
+              Ayer
+            </button>
+            <input
+              type="date"
+              value={dateStr}
+              onChange={(e) => setDateStr(e.target.value)}
+              className="flex-1 rounded-lg border border-slate-300 px-2 py-1 text-xs font-bold"
+            />
+          </div>
+        </div>
+
         <div className="grid grid-cols-4 gap-1.5">
           {[15, 30, 45, 60].map((m) => (
-            <button key={m} onClick={() => setMins(m)} className={`py-2 rounded-xl text-xs font-bold border ${mins === m ? 'bg-slate-900 text-white' : 'bg-slate-100'}`}>+{m}m</button>
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMins(m)}
+              className={`py-2 rounded-xl text-xs font-bold border ${
+                mins === m ? 'bg-slate-900 text-white' : 'bg-slate-100'
+              }`}
+            >
+              +{m}m
+            </button>
           ))}
         </div>
-        <button onClick={() => onSave({ student_id: target.student_id, subject_id: target.subject_id, topic_id: target.topic_id, minutes: mins })} className="w-full py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow">
-          Guardar +{mins}m
+
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Nota opcional (ej. Repaso de ejercicios)..."
+          className="w-full rounded-xl border border-slate-300 p-2 text-xs"
+        />
+
+        <button
+          type="button"
+          onClick={() =>
+            onSave({
+              student_id: target.student_id,
+              subject_id: target.subject_id,
+              topic_id: target.topic_id,
+              subtopic_id: target.subtopic_id || null,
+              date: dateStr,
+              minutes: mins,
+              note,
+            })
+          }
+          className="w-full py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow"
+        >
+          Guardar +{mins}m ({formatHumanDate(dateStr)})
         </button>
       </div>
     </div>
