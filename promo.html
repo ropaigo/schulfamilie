@@ -3,35 +3,38 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SchulFamilie — Google Play Store Promo Video (1920×1080 • Deutsch)</title>
+  <title>SchulFamilie — Play Store Motion Trailer (1920×1080 • 60fps)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,500;0,700;0,800;1,700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
-      background: #090d16;
-      color: #f8fafc;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      background: #141413;
+      color: #faf9f5;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     }
     canvas {
-      box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.75);
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 30px 70px -15px rgba(0, 0, 0, 0.85);
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
     }
   </style>
 </head>
-<body class="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 gap-5">
+<body class="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 gap-4">
 
-  <!-- Cabecera de control -->
-  <div class="w-full max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl">
+  <!-- Barra de controles -->
+  <div class="w-full max-w-5xl flex flex-col sm:flex-row items-center justify-between gap-3 bg-neutral-900 border border-neutral-800 rounded-2xl p-4 shadow-xl">
     <div class="flex items-center gap-3">
-      <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-emerald-500 flex items-center justify-center text-2xl shadow">
-        🎬
+      <div class="w-10 h-10 rounded-xl bg-[#FF5A36] flex items-center justify-center font-black text-white text-lg shadow">
+        SF
       </div>
       <div>
         <h1 class="font-extrabold text-base sm:text-lg text-white leading-tight">
-          SchulFamilie — Google Play Promo Video (1920×1080 • Deutsch)
+          SchulFamilie — Play Store Motion Trailer (1080p • 60 FPS)
         </h1>
-        <p class="text-xs text-slate-400">
-          28.5s • 16:9 Full HD • Sin sonido • E2EE Cloud + KI-Scan + Active Recall + Noten 1–6
+        <p class="text-xs text-neutral-400">
+          Estilo Motion Graphics humano • Zoom dinámico, tipeo en vivo, tarjetas 3D y transiciones whip-pan
         </p>
       </div>
     </div>
@@ -39,60 +42,60 @@
     <div class="flex items-center gap-2 w-full sm:w-auto">
       <button
         id="btn-restart"
-        class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition"
+        class="px-3.5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-bold border border-neutral-700 transition"
       >
         ↺ Reiniciar
       </button>
       <button
         id="btn-export"
-        class="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-500 hover:to-emerald-500 text-white text-xs sm:text-sm font-extrabold shadow-lg transition flex items-center justify-center gap-2"
+        class="flex-1 sm:flex-initial px-5 py-2.5 rounded-xl bg-[#FF5A36] hover:bg-[#ff6e4f] text-white text-xs sm:text-sm font-extrabold shadow-lg transition flex items-center justify-center gap-2"
       >
-        <span>⬇️ Descargar Vídeo (Full HD)</span>
+        <span>⬇️ Descargar Vídeo (.mp4 / .webm)</span>
       </button>
     </div>
   </div>
 
-  <!-- Barra de progreso de exportación -->
-  <div id="export-status" class="hidden w-full max-w-5xl bg-indigo-950/80 border border-indigo-500/40 rounded-2xl p-4 space-y-2">
-    <div class="flex items-center justify-between text-xs font-bold text-indigo-200">
-      <span id="export-label">Grabando vídeo en Full HD (1920×1080 a 60 FPS)... No cierres esta pestaña.</span>
+  <!-- Estado de grabación -->
+  <div id="export-status" class="hidden w-full max-w-5xl bg-neutral-900 border border-[#FF5A36]/50 rounded-2xl p-4 space-y-2">
+    <div class="flex items-center justify-between text-xs font-bold text-orange-200">
+      <span>Renderizando animación a 60 FPS reales (1920×1080)... No cambies de pestaña.</span>
       <span id="export-pct">0%</span>
     </div>
-    <div class="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden">
-      <div id="export-bar" class="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-150" style="width: 0%"></div>
+    <div class="w-full h-2.5 bg-neutral-950 rounded-full overflow-hidden">
+      <div id="export-bar" class="h-full bg-[#FF5A36] transition-all duration-100" style="width: 0%"></div>
     </div>
   </div>
 
-  <!-- Canvas 1920x1080 escalado responsivamente -->
+  <!-- Lienzo 1920x1080 -->
   <div class="w-full max-w-5xl">
-    <canvas id="promoCanvas" width="1920" height="1080" class="w-full h-auto bg-slate-950"></canvas>
+    <canvas id="promoCanvas" width="1920" height="1080" class="w-full h-auto bg-[#FBF8F3]"></canvas>
   </div>
 
-  <!-- Indicador de escenas / Timeline -->
+  <!-- Línea de tiempo interactiva -->
   <div class="w-full max-w-5xl grid grid-cols-3 sm:grid-cols-6 gap-2 text-center text-[11px]">
-    <button onclick="jumpTo(0)" class="scene-btn p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500 transition">
-      <div class="font-bold text-indigo-400">1. Hook</div>
-      <div class="text-slate-400">0s – 4.5s</div>
+    <button onclick="jumpTo(0)" class="p-2 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-[#FF5A36] transition">
+      <div class="font-bold text-[#FF5A36]">1. Chat-Intro</div>
+      <div class="text-neutral-400">0s – 4.5s</div>
     </button>
-    <button onclick="jumpTo(4.5)" class="scene-btn p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500 transition">
-      <div class="font-bold text-emerald-400">2. KI-Scan & Recap</div>
-      <div class="text-slate-400">4.5s – 9.5s</div>
+    <button onclick="jumpTo(4.5)" class="p-2 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-[#FF5A36] transition">
+      <div class="font-bold text-amber-400">2. Live-Scan & Zoom</div>
+      <div class="text-neutral-400">4.5s – 9.8s</div>
     </button>
-    <button onclick="jumpTo(9.5)" class="scene-btn p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500 transition">
-      <div class="font-bold text-sky-400">3. E2EE Cloud</div>
-      <div class="text-slate-400">9.5s – 14.5s</div>
+    <button onclick="jumpTo(9.8)" class="p-2 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-[#FF5A36] transition">
+      <div class="font-bold text-emerald-400">3. QR & Cloud Sync</div>
+      <div class="text-neutral-400">9.8s – 14.5s</div>
     </button>
-    <button onclick="jumpTo(14.5)" class="scene-btn p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500 transition">
-      <div class="font-bold text-amber-400">4. Active Recall</div>
-      <div class="text-slate-400">14.5s – 19.5s</div>
+    <button onclick="jumpTo(14.5)" class="p-2 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-[#FF5A36] transition">
+      <div class="font-bold text-sky-400">4. 3D Flip-Card</div>
+      <div class="text-neutral-400">14.5s – 19.8s</div>
     </button>
-    <button onclick="jumpTo(19.5)" class="scene-btn p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500 transition">
-      <div class="font-bold text-rose-400">5. Kalender & 1–6</div>
-      <div class="text-slate-400">19.5s – 24.5s</div>
+    <button onclick="jumpTo(19.8)" class="p-2 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-[#FF5A36] transition">
+      <div class="font-bold text-rose-400">5. Kalender Zoom</div>
+      <div class="text-neutral-400">19.8s – 24.5s</div>
     </button>
-    <button onclick="jumpTo(24.5)" class="scene-btn p-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500 transition">
-      <div class="font-bold text-purple-400">6. Google Play</div>
-      <div class="text-slate-400">24.5s – 28.5s</div>
+    <button onclick="jumpTo(24.5)" class="p-2 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-[#FF5A36] transition">
+      <div class="font-bold text-white">6. Finale</div>
+      <div class="text-neutral-400">24.5s – 28.5s</div>
     </button>
   </div>
 
@@ -101,7 +104,8 @@
     const ctx = canvas.getContext('2d');
     const W = 1920;
     const H = 1080;
-    const TOTAL_DURATION = 28.5; // segundos
+    const TOTAL_DURATION = 28.5;
+    const FONT = "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif";
 
     let startTime = performance.now();
     let isExporting = false;
@@ -117,515 +121,701 @@
     });
 
     // =========================================================================
-    // UTILIDADES DE EASING Y DIBUJO VECTORIAL NITIDO (1920x1080)
+    // FÍSICAS SPRING & EASING (ESTILO AFTER EFFECTS)
     // =========================================================================
-    const clamp = (v, min = 0, max = 1) => Math.max(min, Math.min(max, v));
-    const easeOutCubic = (t) => 1 - Math.pow(1 - clamp(t), 3);
-    const easeOutBack = (t) => {
-      const c1 = 1.70158;
-      const c3 = c1 + 1;
-      const x = clamp(t);
-      return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
-    };
-    const easeInOut = (t) => {
+    const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+    const lerp = (a, b, t) => a + (b - a) * clamp(t);
+    const easeOutQuart = (t) => 1 - Math.pow(1 - clamp(t), 4);
+    const easeInOutCubic = (t) => {
       const x = clamp(t);
       return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
     };
+    // Muelle elástico real (spring overshoot)
+    const spring = (t, tension = 0.3) => {
+      const x = clamp(t);
+      if (x === 0 || x === 1) return x;
+      return Math.pow(2, -10 * x) * Math.sin((x - tension / 4) * (2 * Math.PI) / tension) + 1;
+    };
+    const easeOutBack = (t) => {
+      const x = clamp(t);
+      const c1 = 1.85;
+      const c3 = c1 + 1;
+      return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+    };
 
-    function roundRect(x, y, w, h, r, fill, stroke, strokeWidth = 2) {
+    // =========================================================================
+    // PRIMITIVAS DE DISEÑO EDITORIAL & VECTORIAL (CERO EMOJIS DE SISTEMA)
+    // =========================================================================
+    function rRect(x, y, w, h, r, fill, stroke, sw = 2) {
       ctx.beginPath();
       ctx.roundRect(x, y, w, h, r);
-      if (fill) {
-        ctx.fillStyle = fill;
-        ctx.fill();
-      }
-      if (stroke) {
-        ctx.strokeStyle = stroke;
-        ctx.lineWidth = strokeWidth;
-        ctx.stroke();
-      }
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = sw; ctx.stroke(); }
     }
 
-    function drawText(text, x, y, {
-      size = 48,
-      weight = '800',
-      color = '#ffffff',
-      align = 'left',
-      maxWidth = 1600,
-      alpha = 1
+    function txt(str, x, y, {
+      size = 44, weight = '800', color = '#191918', align = 'left', alpha = 1, italic = false
     } = {}) {
       ctx.save();
-      ctx.globalAlpha = clamp(alpha);
-      ctx.font = `${weight} ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif`;
+      ctx.globalAlpha *= clamp(alpha);
+      ctx.font = `${italic ? 'italic ' : ''}${weight} ${size}px ${FONT}`;
       ctx.fillStyle = color;
       ctx.textAlign = align;
       ctx.textBaseline = 'middle';
-      ctx.fillText(text, x, y, maxWidth);
+      ctx.fillText(str, x, y);
       ctx.restore();
     }
 
-    function drawBadge(text, x, y, bgColor, textColor, borderColor, alpha = 1) {
+    // Dibuja un subrayado / círculo hecho a mano (efecto rotulador orgánico con progreso)
+    function drawHandMarkerLine(x1, y1, x2, y2, progress, color = '#FF5A36', width = 10) {
+      const p = clamp(progress);
+      if (p <= 0) return;
       ctx.save();
-      ctx.globalAlpha = clamp(alpha);
-      ctx.font = '800 22px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      const padX = 24;
-      const w = ctx.measureText(text).width + padX * 2;
-      const h = 48;
-      roundRect(x, y, w, h, 24, bgColor, borderColor, 2);
-      ctx.fillStyle = textColor;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(text, x + w / 2, y + h / 2 + 1);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      const cx = lerp(x1, (x1 + x2) / 2, p);
+      const cy = lerp(y1, (y1 + y2) / 2 - 12, p);
+      const ex = lerp(x1, x2, p);
+      const ey = lerp(y1, y2, p);
+      ctx.quadraticCurveTo(cx, cy, ex, ey);
+      ctx.stroke();
       ctx.restore();
-      return w;
     }
 
-    // Dibuja un smartphone Android moderno con muesca/cámara y pantalla personalizable
-    function drawAndroidPhone(x, y, w, h, drawScreenFn, alpha = 1) {
+    // Onda táctil de dedo (Touch Ripple + Cursor animado)
+    function drawTouchCursor(x, y, clickProgress = 0) {
       ctx.save();
-      ctx.globalAlpha = clamp(alpha);
-      // Sombra exterior
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
-      ctx.shadowBlur = 50;
-      ctx.shadowOffsetY = 25;
-      // Marco metálico del teléfono
-      roundRect(x, y, w, h, 52, '#0f172a', '#334155', 6);
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetY = 0;
-
-      // Pantalla interior
-      const pad = 16;
-      const sx = x + pad;
-      const sy = y + pad;
-      const sw = w - pad * 2;
-      const sh = h - pad * 2;
-
-      ctx.save();
+      if (clickProgress > 0 && clickProgress < 1) {
+        const rp = easeOutQuart(clickProgress);
+        ctx.beginPath();
+        ctx.arc(x, y, 22 + rp * 58, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 90, 54, ${1 - rp})`;
+        ctx.lineWidth = 5;
+        ctx.stroke();
+      }
+      const pressScale = clickProgress > 0 && clickProgress < 0.4 ? 0.82 : 1;
+      ctx.translate(x, y);
+      ctx.scale(pressScale, pressScale);
+      ctx.shadowColor = 'rgba(0,0,0,0.28)';
+      ctx.shadowBlur = 16;
+      ctx.shadowOffsetY = 6;
       ctx.beginPath();
-      ctx.roundRect(sx, sy, sw, sh, 38);
-      ctx.clip();
-
-      // Fondo blanco/slate de pantalla
-      ctx.fillStyle = '#f1f5f9';
-      ctx.fillRect(sx, sy, sw, sh);
-
-      // Contenido personalizado de la pantalla
-      if (drawScreenFn) drawScreenFn(sx, sy, sw, sh);
-
-      // Barra de estado superior Android + cámara punch-hole
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
-      ctx.fillRect(sx, sy, sw, 42);
-      ctx.beginPath();
-      ctx.arc(sx + sw / 2, sy + 21, 9, 0, Math.PI * 2);
-      ctx.fillStyle = '#020617';
+      ctx.arc(0, 0, 22, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 90, 54, 0.9)';
       ctx.fill();
-      drawText('16:30', sx + 26, sy + 22, { size: 16, weight: '700', color: '#e2e8f0' });
-      drawText('5G  100%', sx + sw - 24, sy + 22, { size: 15, weight: '700', color: '#e2e8f0', align: 'right' });
-
-      ctx.restore();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
       ctx.restore();
     }
 
-    function drawBackground(t) {
-      const grad = ctx.createLinearGradient(0, 0, W, H);
-      grad.addColorStop(0, '#090d16');
-      grad.addColorStop(0.55, '#0f172a');
-      grad.addColorStop(1, '#1e1b4b');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, W, H);
-
-      // Orbes ambientales sutiles en movimiento
+    // Iconos vectoriales limpios (Check, Lock, Lightning, Camera, Star)
+    function drawCheckIcon(cx, cy, r, bg = '#15803d', fg = '#ffffff') {
       ctx.save();
-      const ox1 = 320 + Math.sin(t * 0.4) * 80;
-      const oy1 = 220 + Math.cos(t * 0.3) * 60;
-      const g1 = ctx.createRadialGradient(ox1, oy1, 20, ox1, oy1, 520);
-      g1.addColorStop(0, 'rgba(79, 70, 229, 0.24)');
-      g1.addColorStop(1, 'rgba(79, 70, 229, 0)');
-      ctx.fillStyle = g1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = bg;
+      ctx.fill();
+      ctx.strokeStyle = fg;
+      ctx.lineWidth = r * 0.24;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.42, cy + r * 0.04);
+      ctx.lineTo(cx - r * 0.1, cy + r * 0.36);
+      ctx.lineTo(cx + r * 0.45, cy - r * 0.3);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawLockIcon(cx, cy, scale = 1, color = '#191918') {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(scale, scale);
+      rRect(-18, -4, 36, 28, 7, color, null);
+      ctx.beginPath();
+      ctx.arc(0, -6, 11, Math.PI, 0, false);
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = color;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 10, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawBoltIcon(cx, cy, scale = 1, color = '#FF5A36') {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(scale, scale);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(4, -22);
+      ctx.lineTo(-14, 4);
+      ctx.lineTo(-1, 4);
+      ctx.lineTo(-6, 22);
+      ctx.lineTo(14, -4);
+      ctx.lineTo(1, -4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Papel cálido con cuadrícula escolar sutil de fondo
+    function drawWarmPaperBg(t, bgHex = '#FBF8F3', gridAlpha = 0.045) {
+      ctx.fillStyle = bgHex;
       ctx.fillRect(0, 0, W, H);
 
-      const ox2 = 1580 + Math.cos(t * 0.35) * 90;
-      const oy2 = 840 + Math.sin(t * 0.45) * 70;
-      const g2 = ctx.createRadialGradient(ox2, oy2, 20, ox2, oy2, 560);
-      g2.addColorStop(0, 'rgba(16, 185, 129, 0.18)');
-      g2.addColorStop(1, 'rgba(16, 185, 129, 0)');
-      ctx.fillStyle = g2;
-      ctx.fillRect(0, 0, W, H);
+      // Cuadrícula tipo "Kariertes Mathe-Heft" en movimiento suave
+      ctx.save();
+      ctx.strokeStyle = `rgba(25, 25, 24, ${gridAlpha})`;
+      ctx.lineWidth = 1.5;
+      const step = 64;
+      const offsetX = (t * 22) % step;
+      const offsetY = (t * 14) % step;
+      for (let x = -step + offsetX; x < W + step; x += step) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, H);
+        ctx.stroke();
+      }
+      for (let y = -step + offsetY; y < H + step; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+        ctx.stroke();
+      }
       ctx.restore();
     }
 
     // =========================================================================
-    // ESCENA 1 (0s - 4.5s): HOOK DEL PROBLEMA EN ALEMANIA
+    // ESCENA 1 (0s - 4.5s): CHAT REAL DE TARDE -> EL PROBLEMA COTIDIANO
     // =========================================================================
-    function renderScene1(localT) {
-      const p1 = easeOutCubic(localT / 0.7);
-      const p2 = easeOutCubic((localT - 1.1) / 0.7);
-      const p3 = easeOutBack((localT - 2.3) / 0.8);
-      const fadeOut = localT > 4.0 ? 1 - easeInOut((localT - 4.0) / 0.5) : 1;
+    function scene1(t) {
+      drawWarmPaperBg(t, '#FBF8F3', 0.05);
 
+      // Reloj / Contexto arriba
+      const p0 = easeOutQuart(t / 0.5);
       ctx.save();
-      ctx.globalAlpha = fadeOut;
+      ctx.translate(W / 2, 115 - (1 - p0) * 30);
+      rRect(-190, -26, 380, 52, 26, '#191918', null);
+      txt('DIENSTAG • 17:15 UHR ZU HAUSE', 0, 1, { size: 20, weight: '800', color: '#FBF8F3', align: 'center', alpha: p0 });
+      ctx.restore();
 
-      // Pregunta gancho
-      drawText('„Wie war die Schule heute?“', W / 2, 310 - (1 - p1) * 40, {
-        size: 74, weight: '900', color: '#f8fafc', align: 'center', alpha: p1
-      });
-
-      drawText('„Gut.“ — Und 3 Tage vor der Klassenarbeit fehlt der Überblick...', W / 2, 420 - (1 - p2) * 30, {
-        size: 40, weight: '600', color: '#94a3b8', align: 'center', alpha: p2
-      });
-
-      // Tarjeta solución
-      if (localT > 2.2) {
-        const scale = 0.85 + 0.15 * clamp(p3);
+      // Burbuja 1 (Papá pregunta)
+      if (t > 0.35) {
+        const b1 = easeOutBack((t - 0.35) / 0.55);
         ctx.save();
-        ctx.translate(W / 2, 690);
-        ctx.scale(scale, scale);
-        roundRect(-480, -135, 960, 270, 36, 'rgba(30, 41, 59, 0.85)', 'rgba(99, 102, 241, 0.6)', 3);
-        drawText('🎒', -360, 0, { size: 110, align: 'center', alpha: p3 });
-        drawText('SchulFamilie', -240, -45, { size: 68, weight: '900', color: '#ffffff', alpha: p3 });
-        drawText('Der smarte Lern-Begleiter für Eltern & Schüler', -240, 28, { size: 30, weight: '600', color: '#a5b4fc', alpha: p3 });
-        drawText('🇩🇪 System 1+ bis 6  •  Stundenplan  •  Active Recall', -240, 82, { size: 24, weight: '700', color: '#34d399', alpha: p3 });
+        ctx.translate(310, 275);
+        ctx.scale(b1, b1);
+        ctx.shadowColor = 'rgba(0,0,0,0.08)';
+        ctx.shadowBlur = 24;
+        ctx.shadowOffsetY = 10;
+        rRect(0, -60, 780, 120, [32, 32, 32, 8], '#ffffff', '#E5E0D5', 3);
+        ctx.shadowBlur = 0;
+        txt('PAPA', 38, -26, { size: 17, weight: '800', color: '#FF5A36' });
+        txt('„Und, was habt ihr heute in Mathe gemacht?“', 38, 18, { size: 33, weight: '800', color: '#191918' });
         ctx.restore();
       }
-      ctx.restore();
-    }
 
-    // =========================================================================
-    // ESCENA 2 (4.5s - 9.5s): KI-FOTO-SCAN & 3-MINUTEN RECAP
-    // =========================================================================
-    function renderScene2(localT) {
-      const enter = easeOutCubic(localT / 0.6);
-      const exit = localT > 4.5 ? 1 - easeInOut((localT - 4.5) / 0.5) : 1;
-      const alpha = enter * exit;
-
-      // Columna izquierda: Texto comercial en alemán
-      const tx = 130 - (1 - enter) * 60;
-      drawBadge('📸 KI-FOTO-SCAN & DAILY RECAP', tx, 240, 'rgba(16, 185, 129, 0.18)', '#34d399', 'rgba(16, 185, 129, 0.5)', alpha);
-      drawText('Heft oder Stundenplan', tx, 360, { size: 66, weight: '900', color: '#ffffff', alpha });
-      drawText('abfotografieren. Fertig.', tx, 445, { size: 66, weight: '900', color: '#34d399', alpha });
-
-      drawText('KI erkennt automatisch Thema, Unterthema & Hausaufgaben.', tx, 560, { size: 32, weight: '500', color: '#cbd5e1', alpha });
-      drawText('Inklusive Mündliche Mitarbeit (1–5) & 🔄 Vertretung.', tx, 615, { size: 32, weight: '500', color: '#cbd5e1', alpha });
-
-      // Píldoras de características
-      drawBadge('🌟 Mitarbeit: Note 1–5', tx, 710, 'rgba(255,255,255,0.08)', '#e2e8f0', 'rgba(255,255,255,0.2)', alpha);
-      drawBadge('🔄 1-Klick Vertretung / Entfall', tx + 360, 710, 'rgba(245, 158, 11, 0.18)', '#fcd34d', 'rgba(245, 158, 11, 0.4)', alpha);
-
-      // Columna derecha: Teléfono Android mostrando el escaneo IA y Recap
-      const px = 1190;
-      const py = 95 + (1 - enter) * 60;
-      drawAndroidPhone(px, py, 480, 890, (sx, sy, sw, sh) => {
-        // Header de app
-        ctx.fillStyle = '#0f172a';
-        ctx.fillRect(sx, sy + 42, sw, 110);
-        drawText('✨ Daily Recap • Montag', sx + 24, sy + 82, { size: 22, weight: '800', color: '#ffffff' });
-        drawText('📐 Mathematik (1. Stunde)', sx + 24, sy + 120, { size: 18, weight: '600', color: '#a5b4fc' });
-
-        // Tarjeta KI-Scan
-        roundRect(sx + 20, sy + 172, sw - 40, 175, 20, '#eef2ff', '#818cf8', 2);
-        drawText('📸 KI-Heft-Scanner aktiv', sx + 38, sy + 204, { size: 18, weight: '800', color: '#3730a3' });
-        roundRect(sx + 38, sy + 228, sw - 76, 95, 14, '#ffffff', '#c7d2fe', 1.5);
-        drawText('📂 Thema: Bruchrechnung', sx + 54, sy + 256, { size: 16, weight: '800', color: '#1e293b' });
-        drawText('📄 Subthema: Kehrwert-Division', sx + 54, sy + 286, { size: 15, weight: '600', color: '#475569' });
-        drawText('📝 „Zweiten Bruch umdrehen & kürzen“', sx + 54, sy + 310, { size: 13, weight: '600', color: '#059669' });
-
-        // Láser de escaneo animado
-        const scanY = sy + 185 + ((Math.sin(localT * 4) + 1) / 2) * 140;
-        if (localT < 2.5) {
-          ctx.fillStyle = 'rgba(16, 185, 129, 0.7)';
-          ctx.fillRect(sx + 26, scanY, sw - 52, 4);
-        }
-
-        // Bloque de Mündliche Mitarbeit (1 a 5)
-        roundRect(sx + 20, sy + 368, sw - 40, 180, 20, '#ffffff', '#cbd5e1', 1.5);
-        drawText('🙋‍♂️ Mündliche Mitarbeit heute:', sx + 38, sy + 402, { size: 17, weight: '800', color: '#0f172a' });
-        const grades = [
-          { n: '🌟 1', lbl: 'Sehr gut', active: localT > 1.8 },
-          { n: '🙋 2', lbl: 'Gut', active: false },
-          { n: '🙂 3', lbl: 'Normal', active: false },
-          { n: '😶 5', lbl: 'Wenig', active: false },
-        ];
-        grades.forEach((g, idx) => {
-          const bx = sx + 34 + idx * 96;
-          const by = sy + 432;
-          roundRect(bx, by, 88, 92, 14, g.active ? '#059669' : '#f8fafc', g.active ? '#059669' : '#cbd5e1', 2);
-          drawText(g.n, bx + 44, by + 32, { size: 20, weight: '800', color: g.active ? '#fff' : '#0f172a', align: 'center' });
-          drawText(g.lbl, bx + 44, by + 66, { size: 13, weight: '700', color: g.active ? '#d1fae5' : '#64748b', align: 'center' });
-        });
-
-        // Bloque Vertretung / Entfall
-        roundRect(sx + 20, sy + 570, sw - 40, 95, 20, '#fffbeb', '#f59e0b', 1.5);
-        drawText('2. Stunde: 📖 Deutsch', sx + 38, sy + 602, { size: 16, weight: '700', color: '#78350f' });
-        drawBadge('🔄 Vertretung (ohne Thema)', sx + 38, sy + 622, '#fef3c7', '#92400e', '#f59e0b', 1);
-
-        // Botón guardar
-        roundRect(sx + 20, sy + 760, sw - 40, 64, 18, '#4f46e5', null);
-        drawText('✓ Recap speichern & weiter', sx + sw / 2, sy + 792, { size: 19, weight: '800', color: '#ffffff', align: 'center' });
-      }, alpha);
-    }
-
-    // =========================================================================
-    // ESCENA 3 (9.5s - 14.5s): NUBE CIEGA E2EE (SINCRONIZACIÓN AUTOMÁTICA)
-    // =========================================================================
-    function renderScene3(localT) {
-      const enter = easeOutCubic(localT / 0.6);
-      const exit = localT > 4.5 ? 1 - easeInOut((localT - 4.5) / 0.5) : 1;
-      const alpha = enter * exit;
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-
-      // Título superior centrado
-      drawBadge('🔒 ENDE-ZU-ENDE-VERSCHLÜSSELT (E2EE)', W / 2 - 260, 80, 'rgba(56, 189, 248, 0.18)', '#38bdf8', 'rgba(56, 189, 248, 0.5)', alpha);
-      drawText('Automatischer Familien-Sync über die Cloud', W / 2, 185, { size: 60, weight: '900', color: '#ffffff', align: 'center' });
-      drawText('Einmal per QR-Code koppeln. Niemand außer euch kann mitlesen.', W / 2, 250, { size: 30, weight: '500', color: '#cbd5e1', align: 'center' });
-
-      // Teléfono izquierdo: Kind (Enrique / Fernando)
-      drawAndroidPhone(210, 340, 360, 640, (sx, sy, sw, sh) => {
-        ctx.fillStyle = '#4f46e5';
-        ctx.fillRect(sx, sy + 42, sw, 85);
-        drawText('👦🏻 Kinder-Handy', sx + 22, sy + 86, { size: 22, weight: '800', color: '#ffffff' });
-        roundRect(sx + 20, sy + 150, sw - 40, 170, 18, '#ffffff', '#cbd5e1', 1.5);
-        drawText('✅ Recap gespeichert', sx + 38, sy + 185, { size: 18, weight: '800', color: '#059669' });
-        drawText('📐 Bruchrechnung', sx + 38, sy + 222, { size: 17, weight: '700', color: '#0f172a' });
-        drawText('🌟 Mitarbeit: Note 1', sx + 38, sy + 256, { size: 16, weight: '600', color: '#4f46e5' });
-        drawText('🔐 Verschlüsselt lokal...', sx + 38, sy + 292, { size: 15, weight: '700', color: '#64748b' });
-      }, alpha);
-
-      // Centro: Nube Ciega E2EE
-      const pulse = 1 + Math.sin(localT * 5) * 0.04;
-      ctx.save();
-      ctx.translate(W / 2, 640);
-      ctx.scale(pulse, pulse);
-      roundRect(-210, -155, 420, 310, 40, 'rgba(15, 23, 42, 0.92)', '#38bdf8', 3);
-      drawText('☁️🔒', 0, -65, { size: 78, align: 'center' });
-      drawText('Blinde E2EE-Cloud', 0, 20, { size: 30, weight: '900', color: '#ffffff', align: 'center' });
-      drawText('Zero-Knowledge Relay', 0, 62, { size: 20, weight: '700', color: '#38bdf8', align: 'center' });
-      drawText('DSGVO-konform 🇩🇪', 0, 102, { size: 20, weight: '800', color: '#34d399', align: 'center' });
-      ctx.restore();
-
-      // Partículas de datos cifrados viajando de izquierda -> nube -> derecha
-      for (let i = 0; i < 4; i++) {
-        const prog = ((localT * 0.65 + i * 0.25) % 1);
-        const px = 580 + prog * 760;
-        const py = 640 - Math.sin(prog * Math.PI) * 90;
-        roundRect(px - 28, py - 20, 56, 40, 12, '#0284c7', '#7dd3fc', 2);
-        drawText('🔒', px, py + 1, { size: 20, align: 'center' });
+      // Burbuja 2 (Respuesta típica del hijo)
+      if (t > 1.25) {
+        const b2 = easeOutBack((t - 1.25) / 0.55);
+        ctx.save();
+        ctx.translate(1610, 445);
+        ctx.scale(b2, b2);
+        ctx.shadowColor = 'rgba(0,0,0,0.08)';
+        ctx.shadowBlur = 24;
+        ctx.shadowOffsetY = 10;
+        rRect(-520, -60, 520, 120, [32, 32, 8, 32], '#191918', null);
+        ctx.shadowBlur = 0;
+        txt('SOHN (7. KLASSE)', -480, -26, { size: 17, weight: '800', color: '#FDBA74' });
+        txt('„Keine Ahnung... Brüche halt.“', -480, 18, { size: 33, weight: '700', color: '#ffffff' });
+        ctx.restore();
       }
 
-      // Teléfono derecho: Eltern-Modus
-      drawAndroidPhone(1350, 340, 360, 640, (sx, sy, sw, sh) => {
-        ctx.fillStyle = '#d97706';
-        ctx.fillRect(sx, sy + 42, sw, 85);
-        drawText('👨‍👦‍👦 Eltern-Handy', sx + 22, sy + 86, { size: 22, weight: '800', color: '#ffffff' });
-        roundRect(sx + 20, sy + 150, sw - 40, 195, 18, '#ffffff', '#f59e0b', 2);
-        drawText('🔄 Live synchronisiert!', sx + 38, sy + 185, { size: 18, weight: '800', color: '#d97706' });
-        drawText('👦🏻 Enrique · ⏱️ 45m heute', sx + 38, sy + 222, { size: 16, weight: '700', color: '#0f172a' });
-        drawText('👦🏼 Fernando · ⏱️ 30m heute', sx + 38, sy + 256, { size: 16, weight: '700', color: '#0f172a' });
-        drawText('⚡ 3 Active Recalls bereit', sx + 38, sy + 295, { size: 16, weight: '800', color: '#4f46e5' });
-      }, alpha);
-
-      ctx.restore();
-    }
-
-    // =========================================================================
-    // ESCENA 4 (14.5s - 19.5s): ELTERN-MODUS: ACTIVE RECALL ORAL
-    // =========================================================================
-    function renderScene4(localT) {
-      const enter = easeOutCubic(localT / 0.6);
-      const exit = localT > 4.5 ? 1 - easeInOut((localT - 4.5) / 0.5) : 1;
-      const alpha = enter * exit;
-
-      // Izquierda: Móvil del Padre con tarjeta de Active Recall
-      drawAndroidPhone(180, 95 + (1 - enter) * 50, 490, 890, (sx, sy, sw, sh) => {
-        ctx.fillStyle = '#d97706';
-        ctx.fillRect(sx, sy + 42, sw, 95);
-        drawText('⚡ Active Recall • Eltern-Modus', sx + 24, sy + 88, { size: 21, weight: '800', color: '#ffffff' });
-
-        // Tarjeta de pregunta
-        roundRect(sx + 20, sy + 160, sw - 40, 520, 24, '#ffffff', '#f59e0b', 3);
-        drawBadge('📐 Mathematik • Bruchrechnung', sx + 38, sy + 182, '#eef2ff', '#3730a3', '#c7d2fe', 1);
-
-        drawText('❓ Frage an dein Kind:', sx + 38, sy + 260, { size: 16, weight: '700', color: '#64748b' });
-        drawText('„Wie dividiert man', sx + 38, sy + 300, { size: 26, weight: '900', color: '#0f172a' });
-        drawText('zwei Brüche?“', sx + 38, sy + 335, { size: 26, weight: '900', color: '#0f172a' });
-
-        // Chuleta para padres
-        roundRect(sx + 36, sy + 380, sw - 72, 130, 16, '#fffbeb', '#fcd34d', 1.5);
-        drawText('💡 Spickzettel für Eltern:', sx + 52, sy + 408, { size: 16, weight: '800', color: '#92400e' });
-        drawText('Mit dem Kehrwert des zweiten', sx + 52, sy + 442, { size: 16, weight: '600', color: '#1e293b' });
-        drawText('Bruchs multiplizieren & kürzen.', sx + 52, sy + 472, { size: 16, weight: '600', color: '#1e293b' });
-
-        // Botones de calificación SM-2
-        drawText('Wie gut war die Antwort?', sx + sw / 2, sy + 545, { size: 15, weight: '700', color: '#64748b', align: 'center' });
-        const btns = [
-          { t: '🔄 Nochmal', sub: 'Morgen', c: '#fef2f2', b: '#fca5a5', active: false },
-          { t: '😓 Mit Hilfe', sub: '2-3 Tage', c: '#fffbeb', b: '#fcd34d', active: false },
-          { t: '👍 Gut', sub: '4-5 Tage', c: '#ecfdf5', b: '#6ee7b7', active: false },
-          { t: '🚀 Perfekt', sub: '+7 Tage', c: '#4f46e5', b: '#4f46e5', active: localT > 2.1 },
-        ];
-        btns.forEach((b, idx) => {
-          const col = idx % 2;
-          const row = Math.floor(idx / 2);
-          const bx = sx + 36 + col * 195;
-          const by = sy + 575 + row * 72;
-          roundRect(bx, by, 185, 62, 14, b.active ? '#4f46e5' : b.c, b.b, 2);
-          drawText(b.t, bx + 92, by + 23, { size: 16, weight: '800', color: b.active ? '#ffffff' : '#0f172a', align: 'center' });
-          drawText(b.sub, bx + 92, by + 46, { size: 12, weight: '600', color: b.active ? '#c7d2fe' : '#64748b', align: 'center' });
+      // Giro dinámico a los 2.4s: Impacto tipográfico grande con rotulador en vivo
+      if (t > 2.35) {
+        const k = easeOutQuart((t - 2.35) / 0.5);
+        ctx.save();
+        ctx.translate(W / 2, 740 + (1 - k) * 50);
+        txt('Schluss mit dem Rätselraten am Abend.', 0, -45, {
+          size: 72, weight: '800', color: '#191918', align: 'center', alpha: k
         });
-      }, alpha);
-
-      // Derecha: Copy comercial en alemán
-      const rx = 790 + (1 - enter) * 60;
-      drawBadge('⚡ ACTIVE RECALL FÜR ELTERN', rx, 270, 'rgba(245, 158, 11, 0.2)', '#fcd34d', 'rgba(245, 158, 11, 0.5)', alpha);
-      drawText('Abfragen wie ein Profi –', rx, 390, { size: 64, weight: '900', color: '#ffffff', alpha });
-      drawText('auch ohne Fachwissen.', rx, 475, { size: 64, weight: '900', color: '#fbbf24', alpha });
-
-      drawText('Du bekommst die fertige Frage + Musterlösung.', rx, 585, { size: 32, weight: '500', color: '#cbd5e1', alpha });
-      drawText('Intelligente Wiederholung genau vor jeder Prüfung.', rx, 640, { size: 32, weight: '500', color: '#cbd5e1', alpha });
+        drawHandMarkerLine(-640, -2, 640, -2, (t - 2.65) / 0.45, '#FF5A36', 14);
+        txt('So behaltet ihr gemeinsam den Überblick – in 3 Minuten.', 0, 52, {
+          size: 38, weight: '700', color: '#57534E', align: 'center', alpha: k
+        });
+        ctx.restore();
+      }
     }
 
     // =========================================================================
-    // ESCENA 5 (19.5s - 24.5s): PRÜFUNGSKALENDER & NOTENSYSTEM (1+ BIS 6)
+    // ESCENA 2 (4.5s - 9.8s): ZOOM DINÁMICO DE CÁMARA + TIPEO EN VIVO + VERTRETUNG
     // =========================================================================
-    function renderScene5(localT) {
-      const enter = easeOutCubic(localT / 0.6);
-      const exit = localT > 4.5 ? 1 - easeInOut((localT - 4.5) / 0.5) : 1;
-      const alpha = enter * exit;
+    function scene2(t) {
+      drawWarmPaperBg(t + 10, '#F4EFE6', 0.05);
 
-      // Izquierda: Copy alemán
-      const tx = 110 - (1 - enter) * 50;
-      drawBadge('🗓️ KALENDER & NOTENSYSTEM 1+ BIS 6', tx, 230, 'rgba(244, 63, 94, 0.2)', '#fda4af', 'rgba(244, 63, 94, 0.5)', alpha);
-      drawText('Alle Klassenarbeiten', tx, 350, { size: 62, weight: '900', color: '#ffffff', alpha });
-      drawText('& Noten im Blick.', tx, 430, { size: 62, weight: '900', color: '#fb7185', alpha });
+      // Cámara virtual: empieza en plano general (1.0) y hace zoom in hacia la tarjeta interactiva
+      const zoomIn = t > 1.6 && t < 4.4 ? easeInOutCubic((t - 1.6) / 0.8) : t >= 4.4 ? 1 - easeInOutCubic((t - 4.4) / 0.6) : 0;
+      const camScale = lerp(1.0, 1.24, zoomIn);
+      const camX = lerp(0, -220, zoomIn);
+      const camY = lerp(0, -60, zoomIn);
 
-      drawText('Automatische Warnstufen (🔴 1T • 🟠 3T • 🟡 7T),', tx, 540, { size: 30, weight: '500', color: '#cbd5e1', alpha });
-      drawText('Hausaufgaben 📌 & Notendurchschnitt Ø 1,7.', tx, 590, { size: 30, weight: '500', color: '#cbd5e1', alpha });
-
-      // Badge Media Alemana
-      roundRect(tx, 665, 420, 95, 22, 'rgba(16, 185, 129, 0.16)', 'rgba(16, 185, 129, 0.5)', 2);
-      drawText('🇩🇪 Notendurchschnitt', tx + 24, 696, { size: 20, weight: '700', color: '#6ee7b7', alpha });
-      drawText('Ø 1,7 (Sehr gut / Gut)', tx + 24, 732, { size: 28, weight: '900', color: '#ffffff', alpha });
-
-      // Derecha: Tarjeta Grande de Calendario Mensual Tipo Tabla
       ctx.save();
-      ctx.globalAlpha = alpha;
-      const cx = 920;
-      const cy = 150 + (1 - enter) * 40;
-      const cw = 890;
-      const ch = 780;
+      ctx.translate(W / 2, H / 2);
+      ctx.scale(camScale, camScale);
+      ctx.translate(-W / 2 + camX, -H / 2 + camY);
 
-      roundRect(cx, cy, cw, ch, 30, '#ffffff', '#cbd5e1', 2);
-      // Cabecera calendario
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.roundRect(cx, cy, cw, 110, [30, 30, 0, 0]);
-      ctx.fill();
-      drawText('🗓️ Prüfungskalender • November', cx + 36, cy + 56, { size: 30, weight: '900', color: '#ffffff' });
-      drawBadge('👨‍👦‍👦 Enrique & Fernando', cx + cw - 300, cy + 32, '#f59e0b', '#0f172a', null, 1);
+      // Columna izquierda: Tipografía cinética
+      const enter = easeOutQuart(t / 0.55);
+      rRect(110, 170, 290, 48, 24, '#FF5A36', null);
+      txt('SCHRITT 1 • NACH DER SCHULE', 255, 195, { size: 18, weight: '800', color: '#ffffff', align: 'center' });
 
-      // Días Mo - So
-      const days = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-      const colW = cw / 7;
-      days.forEach((d, i) => {
-        ctx.fillStyle = '#f1f5f9';
-        ctx.fillRect(cx + i * colW, cy + 110, colW, 44);
-        drawText(d, cx + i * colW + colW / 2, cy + 132, { size: 18, weight: '800', color: '#475569', align: 'center' });
+      txt('3-Minuten Recap', 110, 295, { size: 76, weight: '800', color: '#191918', alpha: enter });
+      txt('oder Foto vom Heft.', 110, 385, { size: 72, weight: '800', color: '#FF5A36', italic: true, alpha: enter });
+
+      txt('Thema, Mitarbeit (Note 1–5) & Vertretungen', 110, 490, { size: 32, weight: '700', color: '#44403C', alpha: enter });
+      txt('direkt nach dem Unterricht festhalten.', 110, 540, { size: 32, weight: '700', color: '#44403C', alpha: enter });
+
+      // Tarjeta interactiva grande a la derecha (UI Viva)
+      const cardX = 960;
+      const cardY = 120 + (1 - enter) * 80;
+      const cardW = 840;
+      const cardH = 840;
+
+      ctx.shadowColor = 'rgba(25, 25, 24, 0.16)';
+      ctx.shadowBlur = 45;
+      ctx.shadowOffsetY = 20;
+      rRect(cardX, cardY, cardW, cardH, 36, '#ffffff', '#E5E0D5', 3);
+      ctx.shadowBlur = 0;
+
+      // Cabecera de la tarjeta
+      rRect(cardX, cardY, cardW, 110, [36, 36, 0, 0], '#191918', null);
+      txt('STUNDENPLAN HEUTE • DIENSTAG', cardX + 42, cardY + 42, { size: 17, weight: '800', color: '#FDBA74' });
+      txt('1. Stunde: Mathematik (7. Klasse)', cardX + 42, cardY + 78, { size: 28, weight: '800', color: '#ffffff' });
+
+      // Campo de texto con efecto de escritura en vivo (Live Typing)
+      rRect(cardX + 38, cardY + 140, cardW - 76, 175, 22, '#FBF8F3', '#D6D3D1', 2);
+      txt('THEMA & UNTERTHEMA (KI-ERKANNT)', cardX + 64, cardY + 174, { size: 16, weight: '800', color: '#78716C' });
+      txt('Bruchrechnung →', cardX + 64, cardY + 216, { size: 26, weight: '800', color: '#191918' });
+
+      const fullTyped = 'Brüche dividieren mit dem Kehrwert';
+      const charCount = Math.floor(clamp((t - 0.6) / 1.4) * fullTyped.length);
+      const currentTyped = fullTyped.slice(0, charCount);
+      txt(currentTyped + (t % 0.5 < 0.25 && t < 2.2 ? '|' : ''), cardX + 64, cardY + 266, {
+        size: 30, weight: '800', color: '#FF5A36'
       });
 
-      // Cuadrícula 4x7
-      const rowH = (ch - 154) / 4;
-      for (let r = 0; r < 4; r++) {
-        for (let c = 0; c < 7; c++) {
-          const cellX = cx + c * colW;
-          const cellY = cy + 154 + r * rowH;
-          const dayNum = r * 7 + c + 1;
-          ctx.strokeStyle = '#e2e8f0';
-          ctx.lineWidth = 1.5;
-          ctx.strokeRect(cellX, cellY, colW, rowH);
+      // Selector de Mündliche Mitarbeit (1 a 5) con clic animado
+      txt('MÜNDLICHE MITARBEIT IN DER STUNDE:', cardX + 42, cardY + 358, { size: 18, weight: '800', color: '#57534E' });
+      const clickedNote1 = t > 2.3;
+      const notes = [
+        { n: '1', lbl: 'Sehr gut', pct: '100%' },
+        { n: '2', lbl: 'Gut', pct: '80%' },
+        { n: '3', lbl: 'Normal', pct: '60%' },
+        { n: '5', lbl: 'Wenig', pct: '20%' },
+      ];
+      notes.forEach((item, idx) => {
+        const bx = cardX + 38 + idx * 195;
+        const by = cardY + 386;
+        const isSel = idx === 0 && clickedNote1;
+        const pop = isSel ? spring((t - 2.3) / 0.5) : 1;
+        ctx.save();
+        ctx.translate(bx + 88, by + 64);
+        ctx.scale(isSel ? 0.92 + 0.08 * pop : 1, isSel ? 0.92 + 0.08 * pop : 1);
+        rRect(-88, -64, 176, 128, 22, isSel ? '#15803D' : '#FBF8F3', isSel ? '#15803D' : '#D6D3D1', 2.5);
+        txt(`Note ${item.n}`, 0, -22, { size: 28, weight: '800', color: isSel ? '#ffffff' : '#191918', align: 'center' });
+        txt(item.lbl, 0, 16, { size: 20, weight: '700', color: isSel ? '#DCFCE7' : '#57534E', align: 'center' });
+        txt(item.pct, 0, 44, { size: 15, weight: '800', color: isSel ? '#86EFAC' : '#A8A29E', align: 'center' });
+        ctx.restore();
+      });
 
-          const isToday = dayNum === 16;
-          if (isToday) {
-            roundRect(cellX + 8, cellY + 8, 34, 34, 17, '#4f46e5', null);
-            drawText(String(dayNum), cellX + 25, cellY + 25, { size: 17, weight: '800', color: '#ffffff', align: 'center' });
-          } else {
-            drawText(String(dayNum), cellX + 18, cellY + 24, { size: 17, weight: '700', color: '#334155' });
-          }
+      // Fila 2ª hora: Tachado en vivo de Vertretung!
+      const vClicked = t > 3.3;
+      rRect(cardX + 38, cardY + 550, cardW - 76, 130, 22, vClicked ? '#FEF3C7' : '#FBF8F3', vClicked ? '#F59E0B' : '#D6D3D1', 2.5);
+      txt('2. Stunde: Deutsch', cardX + 68, cardY + 595, {
+        size: 26, weight: '800', color: vClicked ? '#92400E' : '#191918'
+      });
+      // Línea de tachado que se dibuja sola sobre "2. Stunde: Deutsch"
+      drawHandMarkerLine(cardX + 64, cardY + 595, cardX + 345, cardY + 595, (t - 3.35) / 0.35, '#D97706', 6);
+      txt(vClicked ? 'VERTRETUNG — Keine neuen Themen heute' : 'Als Vertretung streichen', cardX + 68, cardY + 640, {
+        size: 20, weight: '700', color: '#B45309'
+      });
 
-          // Eventos de ejemplo realistas
-          if (dayNum === 6) {
-            roundRect(cellX + 6, cellY + 48, colW - 12, 34, 8, '#ecfdf5', '#10b981', 1.5);
-            drawText('🏅 Bio 1+', cellX + 14, cellY + 65, { size: 14, weight: '800', color: '#065f46' });
-          }
-          if (dayNum === 16) {
-            roundRect(cellX + 6, cellY + 48, colW - 12, 34, 8, '#fffbeb', '#f59e0b', 1.5);
-            drawText('⚡ 2 Recalls', cellX + 12, cellY + 65, { size: 13, weight: '800', color: '#92400e' });
-            roundRect(cellX + 6, cellY + 88, colW - 12, 30, 8, '#eef2ff', '#818cf8', 1.5);
-            drawText('📝 3 Fächer', cellX + 12, cellY + 103, { size: 13, weight: '700', color: '#3730a3' });
-          }
-          if (dayNum === 18) {
-            roundRect(cellX + 6, cellY + 48, colW - 12, 38, 8, '#fef2f2', '#ef4444', 2);
-            drawText('🔴 Mathe', cellX + 12, cellY + 67, { size: 14, weight: '900', color: '#991b1b' });
-            drawText('📌', cellX + colW - 22, cellY + 24, { size: 16, align: 'center' });
-          }
-          if (dayNum === 23) {
-            roundRect(cellX + 6, cellY + 48, colW - 12, 38, 8, '#fefce8', '#eab308', 2);
-            drawText('🟡 Englisch', cellX + 10, cellY + 67, { size: 13, weight: '800', color: '#854d0e' });
-          }
-        }
+      // Botón inferior
+      rRect(cardX + 38, cardY + 716, cardW - 76, 84, 22, '#191918', null);
+      txt('Recap speichern & an Papa senden →', cardX + cardW / 2, cardY + 758, {
+        size: 24, weight: '800', color: '#ffffff', align: 'center'
+      });
+
+      // Cursor táctil moviéndose con suavidad humana entre Note 1 y Vertretung
+      if (t > 1.7 && t < 4.3) {
+        const moveP = easeInOutCubic((t - 2.6) / 0.6);
+        const cx = lerp(cardX + 126, cardX + 520, moveP);
+        const cy = lerp(cardY + 450, cardY + 615, moveP);
+        const click1 = t >= 2.25 && t <= 2.65 ? (t - 2.25) / 0.4 : 0;
+        const click2 = t >= 3.25 && t <= 3.65 ? (t - 3.25) / 0.4 : 0;
+        drawTouchCursor(cx, cy, click1 || click2);
       }
+
       ctx.restore();
     }
 
     // =========================================================================
-    // ESCENA 6 (24.5s - 28.5s): OUTRO & GOOGLE PLAY CTA
+    // ESCENA 3 (9.8s - 14.5s): SINCRONIZACIÓN INSTANTÁNEA (NUBE CIEGA E2EE)
     // =========================================================================
-    function renderScene6(localT) {
-      const p = easeOutBack(localT / 0.8);
-      const p2 = easeOutCubic((localT - 0.6) / 0.7);
+    function scene3(t) {
+      drawWarmPaperBg(t + 20, '#191918', 0.06);
+
+      const enter = easeOutQuart(t / 0.55);
+      // Título editorial sobre fondo carbón cálido
+      txt('Automatisch auf deinem Handy.', W / 2, 145, {
+        size: 68, weight: '800', color: '#FBF8F3', align: 'center', alpha: enter
+      });
+      txt('Ende-zu-Ende verschlüsselt. Kein Server liest mit.', W / 2, 225, {
+        size: 32, weight: '600', color: '#A8A29E', align: 'center', alpha: enter
+      });
+
+      // Tarjeta izquierda (Hijo)
+      const lx = 150 - (1 - enter) * 80;
+      rRect(lx, 330, 500, 560, 34, '#262624', '#44403C', 2.5);
+      rRect(lx + 34, 368, 180, 40, 20, '#FF5A36', null);
+      txt('SCHÜLER-APP', lx + 124, 389, { size: 16, weight: '800', color: '#ffffff', align: 'center' });
+      txt('Recap erledigt', lx + 34, 455, { size: 36, weight: '800', color: '#ffffff' });
+      rRect(lx + 34, 505, 432, 140, 20, '#191918', '#3F3F46', 2);
+      txt('Mathematik • Brüche', lx + 58, 548, { size: 24, weight: '800', color: '#FBF8F3' });
+      txt('Mitarbeit: Note 1 (Sehr gut)', lx + 58, 592, { size: 20, weight: '700', color: '#4ADE80' });
+      txt('Deutsch: Vertretung', lx + 58, 624, { size: 18, weight: '600', color: '#FBBF24' });
+
+      // Tubo de onda orgánica central + Escudo E2EE
+      ctx.save();
+      ctx.strokeStyle = '#44403C';
+      ctx.lineWidth = 6;
+      ctx.setLineDash([14, 14]);
+      ctx.lineDashOffset = -t * 140;
+      ctx.beginPath();
+      ctx.moveTo(650, 610);
+      ctx.lineTo(1270, 610);
+      ctx.stroke();
+      ctx.restore();
+
+      // Cápsulas viajando a alta velocidad
+      for (let i = 0; i < 3; i++) {
+        const p = (t * 0.75 + i * 0.33) % 1;
+        const px = lerp(660, 1250, p);
+        const py = 610 + Math.sin(p * Math.PI * 2) * 28;
+        rRect(px - 34, py - 22, 68, 44, 22, '#FF5A36', '#ffffff', 2);
+        drawLockIcon(px, py - 2, 0.7, '#ffffff');
+      }
+
+      // Medallón central E2EE
+      const pulse = 1 + Math.sin(t * 6) * 0.04;
+      ctx.save();
+      ctx.translate(W / 2, 610);
+      ctx.scale(pulse, pulse);
+      rRect(-155, -155, 310, 310, 155, '#FBF8F3', '#FF5A36', 8);
+      drawLockIcon(0, -36, 1.6, '#191918');
+      txt('BLINDE CLOUD', 0, 42, { size: 24, weight: '800', color: '#191918', align: 'center' });
+      txt('100 % DSGVO', 0, 78, { size: 19, weight: '800', color: '#15803D', align: 'center' });
+      ctx.restore();
+
+      // Tarjeta derecha (Móvil de Papá recibiendo la notificación en vivo)
+      const rx = 1270 + (1 - enter) * 80;
+      rRect(rx, 330, 500, 560, 34, '#FBF8F3', '#E5E0D5', 3);
+      rRect(rx + 34, 368, 180, 40, 20, '#191918', null);
+      txt('ELTERN-MODUS', rx + 124, 389, { size: 16, weight: '800', color: '#FBF8F3', align: 'center' });
+      txt('Sofort im Blick', rx + 34, 455, { size: 36, weight: '800', color: '#191918' });
+
+      // Notificación que salta con muelle elástico
+      if (t > 1.1) {
+        const np = spring((t - 1.1) / 0.7);
+        ctx.save();
+        ctx.translate(rx + 250, 595);
+        ctx.scale(np, np);
+        ctx.shadowColor = 'rgba(0,0,0,0.14)';
+        ctx.shadowBlur = 30;
+        rRect(-216, -90, 432, 180, 24, '#ffffff', '#15803D', 3);
+        ctx.shadowBlur = 0;
+        drawCheckIcon(-168, -32, 24, '#15803D', '#ffffff');
+        txt('Gerade synchronisiert!', -124, -44, { size: 22, weight: '800', color: '#15803D' });
+        txt('Heute: +45 Min. gelernt', -124, -10, { size: 20, weight: '700', color: '#191918' });
+        rRect(-190, 26, 380, 44, 12, '#FEF3C7', null);
+        txt('2 Fragen für heute Abend bereit →', 0, 49, { size: 18, weight: '800', color: '#92400E', align: 'center' });
+        ctx.restore();
+      }
+    }
+
+    // =========================================================================
+    // ESCENA 4 (14.5s - 19.8s): ACTIVE RECALL CON TARJETA QUE GIRA EN 3D (FLIP)
+    // =========================================================================
+    function scene4(t) {
+      drawWarmPaperBg(t + 30, '#FBF8F3', 0.05);
+
+      const enter = easeOutQuart(t / 0.5);
+      // Izquierda: Texto directo y humano
+      rRect(110, 175, 310, 48, 24, '#191918', null);
+      txt('ABENDS AUF DEM SOFA', 265, 200, { size: 18, weight: '800', color: '#FBF8F3', align: 'center' });
+
+      txt('5 Minuten abfragen', 110, 305, { size: 72, weight: '800', color: '#191918', alpha: enter });
+      txt('statt 2 Stunden Streit.', 110, 395, { size: 70, weight: '800', color: '#15803D', italic: true, alpha: enter });
+
+      txt('Du musst kein Mathe-Lehrer sein:', 110, 505, { size: 32, weight: '700', color: '#44403C', alpha: enter });
+      txt('Frage & Musterlösung stehen schon bereit.', 110, 555, { size: 32, weight: '700', color: '#44403C', alpha: enter });
+
+      // Contador de racha animado
+      const streak = t > 3.6 ? 6 : 5;
+      const streakPop = t > 3.6 ? spring((t - 3.6) / 0.5) : 1;
+      ctx.save();
+      ctx.translate(310, 690);
+      ctx.scale(streakPop, streakPop);
+      rRect(-200, -48, 400, 96, 24, '#ffffff', '#E5E0D5', 3);
+      drawBoltIcon(-145, 0, 1.1, '#FF5A36');
+      txt(`Lern-Serie: ${streak} Tage in Folge!`, -105, 2, { size: 25, weight: '800', color: '#191918' });
+      ctx.restore();
+
+      // Derecha: Tarjeta Flashcard con GIRO 3D REAL a los t=1.6s
+      const flipProgress = clamp((t - 1.4) / 0.75);
+      const angle = flipProgress * Math.PI;
+      const scaleX = Math.cos(angle);
+      const showingBack = flipProgress >= 0.5;
 
       ctx.save();
-      const scale = 0.8 + 0.2 * clamp(p);
-      ctx.translate(W / 2, 360);
-      ctx.scale(scale, scale);
-      roundRect(-110, -110, 220, 220, 52, '#4f46e5', '#818cf8', 4);
-      drawText('🎒', 0, 8, { size: 120, align: 'center', alpha: p });
+      ctx.translate(1360, 530);
+      ctx.scale(Math.abs(scaleX), 1);
+
+      ctx.shadowColor = 'rgba(25, 25, 24, 0.18)';
+      ctx.shadowBlur = 50;
+      ctx.shadowOffsetY = 22;
+
+      if (!showingBack) {
+        // CARA A: LA PREGUNTA PARA HACERLE AL HIJO
+        rRect(-430, -340, 860, 680, 38, '#ffffff', '#191918', 4);
+        ctx.shadowBlur = 0;
+        rRect(-370, -280, 320, 46, 23, '#F4EFE6', null);
+        txt('MATHEMATIK • BRÜCHE', -210, -256, { size: 17, weight: '800', color: '#191918', align: 'center' });
+
+        txt('Frage an dein Kind:', -370, -140, { size: 26, weight: '700', color: '#78716C' });
+        txt('„Wie dividiert man', -370, -60, { size: 54, weight: '800', color: '#191918' });
+        txt('einen Bruch durch', -370, 10, { size: 54, weight: '800', color: '#191918' });
+        txt('einen zweiten Bruch?“', -370, 80, { size: 54, weight: '800', color: '#FF5A36' });
+
+        rRect(-370, 190, 740, 86, 22, '#191918', null);
+        txt('Antwort & Spickzettel umdrehen ↻', 0, 233, { size: 24, weight: '800', color: '#ffffff', align: 'center' });
+      } else {
+        // CARA B: LA CHULETA PARA EL PADRE + BOTONES DE CALIFICACIÓN
+        rRect(-430, -340, 860, 680, 38, '#ffffff', '#15803D', 4);
+        ctx.shadowBlur = 0;
+        rRect(-370, -285, 360, 46, 23, '#DCFCE7', null);
+        txt('SPICKZETTEL FÜR ELTERN', -190, -261, { size: 17, weight: '800', color: '#15803D', align: 'center' });
+
+        txt('Musterlösung:', -370, -185, { size: 22, weight: '700', color: '#78716C' });
+        txt('Man multipliziert den ersten Bruch', -370, -125, { size: 36, weight: '800', color: '#191918' });
+        txt('mit dem Kehrwert des zweiten Bruchs.', -370, -72, { size: 36, weight: '800', color: '#15803D' });
+
+        rRect(-370, -15, 740, 84, 18, '#FBF8F3', '#D6D3D1', 2);
+        txt('Beispiel:   2/3  :  4/5   =   2/3  ×  5/4', 0, 27, { size: 28, weight: '800', color: '#191918', align: 'center' });
+
+        txt('WIE HAT DEIN KIND GEANTWORTET?', 0, 125, { size: 17, weight: '800', color: '#78716C', align: 'center' });
+        const opts = [
+          { lbl: 'Unsicher (Morgen)', active: false },
+          { lbl: 'Mit Hilfe (3 Tage)', active: false },
+          { lbl: 'Perfekt erklärt! (+7 Tage)', active: t > 3.4 },
+        ];
+        opts.forEach((o, idx) => {
+          const bx = -370 + idx * 252;
+          const w = idx === 2 ? 236 : 236;
+          const isHit = o.active;
+          rRect(bx, 160, w, 110, 22, isHit ? '#15803D' : '#F4EFE6', isHit ? '#15803D' : '#D6D3D1', 2.5);
+          txt(o.lbl, bx + w / 2, 215, { size: 18, weight: '800', color: isHit ? '#ffffff' : '#191918', align: 'center' });
+        });
+      }
       ctx.restore();
 
-      drawText('SchulFamilie', W / 2, 545, { size: 84, weight: '900', color: '#ffffff', align: 'center', alpha: p });
-      drawText('Weniger Schulstress. Bessere Noten. Mehr Familienzeit.', W / 2, 635, { size: 36, weight: '600', color: '#a5b4fc', align: 'center', alpha: p2 });
-
-      // Botón estilo Google Play
-      if (localT > 0.7) {
-        roundRect(W / 2 - 260, 725, 520, 110, 24, '#0f172a', '#475569', 3);
-        drawText('▶️', W / 2 - 190, 780, { size: 46, align: 'center', alpha: p2 });
-        drawText('JETZT BEI', W / 2 - 130, 758, { size: 18, weight: '700', color: '#94a3b8', alpha: p2 });
-        drawText('Google Play', W / 2 - 130, 795, { size: 42, weight: '900', color: '#ffffff', alpha: p2 });
-        drawText('🔒 100 % E2EE • DSGVO-konform • Für Android & iOS', W / 2, 890, { size: 22, weight: '700', color: '#34d399', align: 'center', alpha: p2 });
+      // Dedo haciendo clic en "Perfekt erklärt!"
+      if (t > 2.8 && t < 4.4) {
+        const cp = t > 3.35 ? (t - 3.35) / 0.45 : 0;
+        drawTouchCursor(1615, 745, cp);
       }
     }
 
     // =========================================================================
-    // LOOP DE ANIMACIÓN PRINCIPAL
+    // ESCENA 5 (19.8s - 24.5s): CALENDARIO VISUAL + CONTADOR DE NOTA MEDIA EN VIVO
     // =========================================================================
+    function scene5(t) {
+      drawWarmPaperBg(t + 40, '#F4EFE6', 0.05);
+
+      const enter = easeOutQuart(t / 0.55);
+
+      // Izquierda: Nota media animándose en vivo (de 2,4 baja a 1,6)
+      rRect(110, 150, 320, 48, 24, '#FF5A36', null);
+      txt('PRÜFUNGSKALENDER & NOTEN', 270, 175, { size: 18, weight: '800', color: '#ffffff', align: 'center' });
+
+      txt('Keine Überraschungen', 110, 275, { size: 64, weight: '800', color: '#191918', alpha: enter });
+      txt('vor Klassenarbeiten.', 110, 355, { size: 64, weight: '800', color: '#FF5A36', alpha: enter });
+
+      // Tarjeta gigante de Notendurchschnitt con contador dinámico
+      const avgVal = lerp(2.4, 1.6, easeInOutCubic((t - 0.5) / 2.2));
+      const avgStr = avgVal.toFixed(1).replace('.', ',');
+
+      ctx.shadowColor = 'rgba(0,0,0,0.1)';
+      ctx.shadowBlur = 35;
+      rRect(110, 440, 620, 420, 34, '#ffffff', '#E5E0D5', 3);
+      ctx.shadowBlur = 0;
+
+      txt('AKTUELLER NOTENDURCHSCHNITT', 155, 505, { size: 19, weight: '800', color: '#78716C' });
+      txt(`Ø ${avgStr}`, 155, 620, { size: 120, weight: '800', color: '#15803D' });
+      drawBadgePill('Deutsches System (1+ bis 6)', 155, 735, '#DCFCE7', '#15803D');
+      txt('Mündliche Mitarbeit: Ø 1,4 (Sehr gut)', 155, 815, { size: 22, weight: '800', color: '#191918' });
+
+      // Derecha: Calendario mensual con días que saltan con muelle (spring)
+      const cx = 810;
+      const cy = 150;
+      const cw = 990;
+      const ch = 710;
+
+      ctx.shadowColor = 'rgba(0,0,0,0.12)';
+      ctx.shadowBlur = 40;
+      rRect(cx, cy, cw, ch, 34, '#ffffff', '#E5E0D5', 3);
+      ctx.shadowBlur = 0;
+
+      rRect(cx, cy, cw, 95, [34, 34, 0, 0], '#191918', null);
+      txt('NOVEMBER • KLASSENARBEITEN & RECAPS', cx + 38, cy + 48, { size: 24, weight: '800', color: '#ffffff' });
+
+      const cols = ['MO', 'DI', 'MI', 'DO', 'FR'];
+      const cellW = (cw - 60) / 5;
+      const cellH = 170;
+
+      cols.forEach((d, i) => {
+        txt(d, cx + 30 + i * cellW + cellW / 2, cy + 128, { size: 17, weight: '800', color: '#78716C', align: 'center' });
+      });
+
+      const events = [
+        { r: 0, c: 1, day: 5, tag: 'Bio Test: 1+', bg: '#DCFCE7', fg: '#15803D', delay: 0.3 },
+        { r: 0, c: 3, day: 7, tag: '3 Recaps ✓', bg: '#F4EFE6', fg: '#191918', delay: 0.5 },
+        { r: 1, c: 0, day: 11, tag: 'Deutsch: 2+', bg: '#DCFCE7', fg: '#15803D', delay: 0.7 },
+        { r: 1, c: 2, day: 13, tag: 'Vertretung', bg: '#FEF3C7', fg: '#B45309', delay: 0.9 },
+        { r: 2, c: 4, day: 22, tag: 'Mathe Arbeit!', bg: '#FEE2E2', fg: '#B91C1C', delay: 1.2, highlight: true },
+      ];
+
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 5; c++) {
+          const bx = cx + 30 + c * cellW;
+          const by = cy + 155 + r * cellH;
+          const dNum = r * 7 + c + 4;
+          rRect(bx + 6, by + 6, cellW - 12, cellH - 12, 18, '#FBF8F3', '#E7E5E4', 2);
+          txt(String(dNum), bx + 24, by + 32, { size: 20, weight: '800', color: '#57534E' });
+        }
+      }
+
+      events.forEach((ev) => {
+        if (t > ev.delay) {
+          const sp = spring((t - ev.delay) / 0.6);
+          const bx = cx + 30 + ev.c * cellW;
+          const by = cy + 155 + ev.r * cellH;
+          ctx.save();
+          ctx.translate(bx + cellW / 2, by + 98);
+          ctx.scale(sp, sp);
+          rRect(-cellW / 2 + 16, -32, cellW - 32, 64, 14, ev.bg, ev.fg, ev.highlight ? 3 : 2);
+          txt(ev.tag, 0, 1, { size: 19, weight: '800', color: ev.fg, align: 'center' });
+          ctx.restore();
+        }
+      });
+    }
+
+    function drawBadgePill(text, x, y, bg, fg) {
+      ctx.save();
+      ctx.font = `800 20px ${FONT}`;
+      const w = ctx.measureText(text).width + 36;
+      rRect(x, y - 22, w, 44, 22, bg, null);
+      txt(text, x + w / 2, y, { size: 20, weight: '800', color: fg, align: 'center' });
+      ctx.restore();
+    }
+
+    // =========================================================================
+    // ESCENA 6 (24.5s - 28.5s): CIERRE EDITORIAL CÁLIDO Y HUMANO
+    // =========================================================================
+    function scene6(t) {
+      drawWarmPaperBg(t + 50, '#191918', 0.06);
+
+      const p1 = spring(t / 0.8);
+      const p2 = easeOutQuart((t - 0.4) / 0.6);
+
+      ctx.save();
+      ctx.translate(W / 2, 260);
+      ctx.scale(p1, p1);
+      rRect(-90, -90, 180, 180, 44, '#FF5A36', null);
+      txt('SF', 0, 4, { size: 82, weight: '800', color: '#ffffff', align: 'center' });
+      ctx.restore();
+
+      txt('SchulFamilie', W / 2, 440, { size: 92, weight: '800', color: '#FBF8F3', align: 'center', alpha: p2 });
+      txt('Weniger Streit um die Schule. Mehr echte Zeit zusammen.', W / 2, 540, {
+        size: 40, weight: '700', color: '#FDBA74', align: 'center', alpha: p2
+      });
+      drawHandMarkerLine(W / 2 - 480, 575, W / 2 + 480, 575, (t - 0.8) / 0.5, '#FF5A36', 8);
+
+      // Botón Google Play limpio
+      if (t > 0.6) {
+        const bp = spring((t - 0.6) / 0.7);
+        ctx.save();
+        ctx.translate(W / 2, 735);
+        ctx.scale(bp, bp);
+        rRect(-270, -62, 540, 124, 30, '#FBF8F3', '#FF5A36', 4);
+        txt('JETZT ENTDECKEN AUF', 0, -22, { size: 18, weight: '800', color: '#57534E', align: 'center' });
+        txt('Google Play', 0, 22, { size: 46, weight: '800', color: '#191918', align: 'center' });
+        ctx.restore();
+
+        txt('Stundenplan  •  KI-Recap  •  Active Recall  •  100 % Privat (E2EE)', W / 2, 900, {
+          size: 24, weight: '700', color: '#A8A29E', align: 'center', alpha: p2
+        });
+      }
+    }
+
+    // Cortinilla de transición rápida estilo editor de vídeo (Whip-Wipe)
+    function drawWhipTransition(progress) {
+      if (progress <= 0 || progress >= 1) return;
+      const p = easeInOutCubic(progress);
+      const x = lerp(-W, W, p);
+      ctx.save();
+      ctx.fillStyle = '#FF5A36';
+      ctx.fillRect(x, 0, W * 0.85, H);
+      ctx.fillStyle = '#191918';
+      ctx.fillRect(x - W * 0.25, 0, W * 0.35, H);
+      ctx.restore();
+    }
+
+    // =========================================================================
+    // MOTOR DE RENDERIZADO A 60 FPS
+    // =========================================================================
+    const CUTS = [4.5, 9.8, 14.5, 19.8, 24.5];
+
     function renderFrameAt(elapsedSec) {
       const t = elapsedSec % TOTAL_DURATION;
-      drawBackground(t);
 
-      if (t < 4.5) renderScene1(t);
-      else if (t < 9.5) renderScene2(t - 4.5);
-      else if (t < 14.5) renderScene3(t - 9.5);
-      else if (t < 19.5) renderScene4(t - 14.5);
-      else if (t < 24.5) renderScene5(t - 19.5);
-      else renderScene6(t - 24.5);
+      if (t < 4.5) scene1(t);
+      else if (t < 9.8) scene2(t - 4.5);
+      else if (t < 14.5) scene3(t - 9.8);
+      else if (t < 19.8) scene4(t - 14.5);
+      else if (t < 24.5) scene5(t - 19.8);
+      else scene6(t - 24.5);
 
-      // Barra de progreso sutil en la parte inferior de vista previa (oculta al exportar si se quiere, aquí útil)
+      // Transiciones whip-pan en cada corte
+      for (const cut of CUTS) {
+        if (Math.abs(t - cut) < 0.22) {
+          const wp = (t - (cut - 0.22)) / 0.44;
+          drawWhipTransition(wp);
+        }
+      }
+
       if (!isExporting) {
-        ctx.fillStyle = 'rgba(255,255,255,0.12)';
-        ctx.fillRect(0, H - 6, W, 6);
-        ctx.fillStyle = '#6366f1';
-        ctx.fillRect(0, H - 6, (t / TOTAL_DURATION) * W, 6);
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        ctx.fillRect(0, H - 8, W, 8);
+        ctx.fillStyle = '#FF5A36';
+        ctx.fillRect(0, H - 8, (t / TOTAL_DURATION) * W, 8);
       }
     }
 
@@ -639,7 +829,7 @@
     requestAnimationFrame(loop);
 
     // =========================================================================
-    // EXPORTADOR DIRECTO A VÍDEO (.MP4 / .WEBM) A 1920x1080 60 FPS
+    // EXPORTADOR A VÍDEO FULL HD
     // =========================================================================
     document.getElementById('btn-export').addEventListener('click', () => {
       if (isExporting) return;
@@ -670,7 +860,7 @@
       const ext = chosenMime.includes('mp4') ? 'mp4' : 'webm';
       const recorder = new MediaRecorder(stream, {
         mimeType: chosenMime || undefined,
-        videoBitsPerSecond: 12000000 // 12 Mbps Full HD nitidez
+        videoBitsPerSecond: 14000000
       });
 
       const chunks = [];
@@ -683,7 +873,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `SchulFamilie_PlayStore_Promo_DE_1080p.${ext}`;
+        a.download = `SchulFamilie_Trailer_DE_1080p.${ext}`;
         a.click();
         URL.revokeObjectURL(url);
 
