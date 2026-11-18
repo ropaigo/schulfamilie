@@ -1,4 +1,4 @@
-const CACHE_NAME = 'schulfamilie-pwa-v9';
+const CACHE_NAME = 'schulfamilie-pwa-v10';
 const LOCAL_ASSETS = [
   './',
   './index.html',

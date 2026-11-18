@@ -536,10 +536,15 @@ function App() {
   const [quickTimeModal, setQuickTimeModal] = useState(null);
   const [editProfileModal, setEditProfileModal] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null); // { message, onConfirm }
 
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3200);
+  };
+
+  const askConfirm = (message, onConfirm) => {
+    setConfirmDialog({ message, onConfirm });
   };
 
   const openRecapForStudent = (stuId, initDate = null, initPeriod = 0, initSubjId = null) => {
@@ -956,6 +961,7 @@ function App() {
             setAppData={setAppData}
             onClose={() => setScheduleModalOpen(false)}
             showToast={showToast}
+            askConfirm={askConfirm}
           />
         ) : editProfileModal ? (
           <EditProfilesAndSubjectsModal
@@ -963,6 +969,7 @@ function App() {
             setAppData={setAppData}
             onClose={() => setEditProfileModal(false)}
             showToast={showToast}
+            askConfirm={askConfirm}
           />
         ) : quickTimeModal ? (
           <QuickAddTimeModal
@@ -1001,6 +1008,7 @@ function App() {
                 setQuickTimeModal={setQuickTimeModal}
                 showToast={showToast}
                 openRecapForStudent={openRecapForStudent}
+                askConfirm={askConfirm}
               />
             )}
 
@@ -1028,6 +1036,7 @@ function App() {
                 setActiveTab={setActiveTab}
                 openRecapForStudent={openRecapForStudent}
                 rateSubtopicRecall={rateSubtopicRecall}
+                askConfirm={askConfirm}
               />
             )}
 
@@ -1089,6 +1098,46 @@ function App() {
         </div>
       </nav>
 
+      {/* DIÁLOGO DE CONFIRMACIÓN ANTES DE BORRAR CUALQUIER ELEMENTO (SÍ / NO) */}
+      {confirmDialog && (
+        <div
+          className="fixed inset-x-0 top-0 bottom-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(15, 23, 42, 0.75)' }}
+        >
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl border-2 border-rose-500 overflow-hidden p-5 space-y-4">
+            <div className="flex items-center gap-2.5 text-rose-600">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <h4 className="font-black text-base text-slate-900">
+                Confirmar eliminación
+              </h4>
+            </div>
+            <p className="text-sm font-semibold text-slate-700 leading-relaxed">
+              {confirmDialog.message}
+            </p>
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setConfirmDialog(null)}
+                className="py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black text-sm border border-slate-300 transition active:scale-95"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const fn = confirmDialog.onConfirm;
+                  setConfirmDialog(null);
+                  if (fn) fn();
+                }}
+                className="py-3 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-sm shadow-md transition active:scale-95"
+              >
+                Sí, eliminar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TOAST FLOTANTE */}
       {toastMessage && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-full shadow-2xl border border-slate-700 text-xs sm:text-sm font-bold flex items-center gap-2 animate-bounce">
@@ -1102,7 +1151,7 @@ function App() {
 // ============================================================================
 // MODAL: CONFIGURADOR DE HORARIO SEMANAL EDITABLE POR ALUMNO
 // ============================================================================
-function ScheduleConfigModal({ appData, currentStudent, setAppData, onClose, showToast }) {
+function ScheduleConfigModal({ appData, currentStudent, setAppData, onClose, showToast, askConfirm }) {
   const [selectedStuId, setSelectedStuId] = useState(currentStudent.id);
   const [selectedDay, setSelectedDay] = useState(1); // 1 = Lunes .. 5 = Viernes
 
@@ -1130,22 +1179,35 @@ function ScheduleConfigModal({ appData, currentStudent, setAppData, onClose, sho
   };
 
   const removeSubjectAtIndex = (idx) => {
-    setAppData((prev) => {
-      const stuSched = prev.schedules[selectedStuId] || {};
-      const currentList = stuSched[selectedDay] || [];
-      return {
-        ...prev,
-        lastUpdated: Date.now(),
-        schedules: {
-          ...prev.schedules,
-          [selectedStuId]: {
-            ...stuSched,
-            [selectedDay]: currentList.filter((_, i) => i !== idx),
+    const subId = dayScheduleIds[idx];
+    const subj = appData.subjects.find((s) => s.id === subId);
+    const dayName = WEEKDAYS.find((w) => w.key === selectedDay)?.name || 'este día';
+    const doRemove = () => {
+      setAppData((prev) => {
+        const stuSched = prev.schedules[selectedStuId] || {};
+        const currentList = stuSched[selectedDay] || [];
+        return {
+          ...prev,
+          lastUpdated: Date.now(),
+          schedules: {
+            ...prev.schedules,
+            [selectedStuId]: {
+              ...stuSched,
+              [selectedDay]: currentList.filter((_, i) => i !== idx),
+            },
           },
-        },
-      };
-    });
-    showToast('Asignatura eliminada del día');
+        };
+      });
+      showToast('Asignatura eliminada del horario');
+    };
+    if (askConfirm) {
+      askConfirm(
+        `¿Estás seguro de que quieres eliminar la ${idx + 1}ª hora (${subj?.name || 'Asignatura'}) del ${dayName}?`,
+        doRemove
+      );
+    } else {
+      doRemove();
+    }
   };
 
   return (
@@ -1299,7 +1361,7 @@ function ScheduleConfigModal({ appData, currentStudent, setAppData, onClose, sho
 // ============================================================================
 // MODAL: AJUSTES DE PERFILES, CURSOS Y ASIGNATURAS (PARA FUTUROS CURSOS)
 // ============================================================================
-function EditProfilesAndSubjectsModal({ appData, setAppData, onClose, showToast }) {
+function EditProfilesAndSubjectsModal({ appData, setAppData, onClose, showToast, askConfirm }) {
   const [stu1Name, setStu1Name] = useState(appData.students[0]?.name || 'Enrique');
   const [stu1Grade, setStu1Grade] = useState(appData.students[0]?.gradeLevel || '7. Klasse (Gymnasium)');
   const [stu2Name, setStu2Name] = useState(appData.students[1]?.name || 'Fernando');
@@ -1343,12 +1405,23 @@ function EditProfilesAndSubjectsModal({ appData, setAppData, onClose, showToast 
   };
 
   const handleDeleteSubject = (subjId) => {
-    setAppData((prev) => ({
-      ...prev,
-      lastUpdated: Date.now(),
-      subjects: prev.subjects.filter((s) => s.id !== subjId),
-    }));
-    showToast('Asignatura eliminada');
+    const subj = appData.subjects.find((s) => s.id === subjId);
+    const doDelete = () => {
+      setAppData((prev) => ({
+        ...prev,
+        lastUpdated: Date.now(),
+        subjects: prev.subjects.filter((s) => s.id !== subjId),
+      }));
+      showToast('🗑️ Asignatura eliminada');
+    };
+    if (askConfirm) {
+      askConfirm(
+        `¿Estás seguro de que quieres eliminar la asignatura "${subj?.name || ''}"?`,
+        doDelete
+      );
+    } else {
+      doDelete();
+    }
   };
 
   return (
@@ -2286,6 +2359,7 @@ function TopicsAndTasksView({
   setQuickTimeModal,
   showToast,
   openRecapForStudent,
+  askConfirm,
 }) {
   const studentSubjects = appData.subjects.filter((s) => s.student_id === currentStudent.id);
   const [selectedSubjectId, setSelectedSubjectId] = useState('ALL');
@@ -2387,12 +2461,23 @@ function TopicsAndTasksView({
   };
 
   const handleDeleteTopic = (topicId) => {
-    setAppData((prev) => ({
-      ...prev,
-      lastUpdated: Date.now(),
-      topics: prev.topics.filter((t) => t.id !== topicId),
-    }));
-    showToast('🗑️ Tema eliminado');
+    const top = appData.topics.find((t) => t.id === topicId);
+    const doDelete = () => {
+      setAppData((prev) => ({
+        ...prev,
+        lastUpdated: Date.now(),
+        topics: prev.topics.filter((t) => t.id !== topicId),
+      }));
+      showToast('🗑️ Tema eliminado');
+    };
+    if (askConfirm) {
+      askConfirm(
+        `¿Estás seguro de que quieres eliminar el tema "${top?.title || ''}" y todos sus subtemas?`,
+        doDelete
+      );
+    } else {
+      doDelete();
+    }
   };
 
   // Guardar Subtema y Descripción (Nuevo o Editado)
@@ -2449,20 +2534,32 @@ function TopicsAndTasksView({
   };
 
   const handleDeleteSubtopic = (topicId, subtopicId) => {
-    setAppData((prev) => ({
-      ...prev,
-      lastUpdated: Date.now(),
-      topics: prev.topics.map((t) =>
-        t.id !== topicId
-          ? t
-          : {
-              ...t,
-              updated_at: Date.now(),
-              subtopics: t.subtopics.filter((st) => st.id !== subtopicId),
-            }
-      ),
-    }));
-    showToast('🗑️ Subtema eliminado');
+    const top = appData.topics.find((t) => t.id === topicId);
+    const sub = top?.subtopics.find((st) => st.id === subtopicId);
+    const doDelete = () => {
+      setAppData((prev) => ({
+        ...prev,
+        lastUpdated: Date.now(),
+        topics: prev.topics.map((t) =>
+          t.id !== topicId
+            ? t
+            : {
+                ...t,
+                updated_at: Date.now(),
+                subtopics: t.subtopics.filter((st) => st.id !== subtopicId),
+              }
+        ),
+      }));
+      showToast('🗑️ Subtema eliminado');
+    };
+    if (askConfirm) {
+      askConfirm(
+        `¿Estás seguro de que quieres eliminar el subtema "${sub?.title || ''}"?`,
+        doDelete
+      );
+    } else {
+      doDelete();
+    }
   };
 
   const updateSubtopicFieldInline = (topicId, subtopicId, patch) => {
@@ -3409,6 +3506,7 @@ function ExamsAndGermanGradesView({
   setActiveTab,
   openRecapForStudent,
   rateSubtopicRecall,
+  askConfirm,
 }) {
   // Vista activa: 'calendar' (Tabla mensual) | 'list' (Lista y expediente)
   const [viewMode, setViewMode] = useState(initialViewMode);
@@ -3610,21 +3708,44 @@ function ExamsAndGermanGradesView({
   const selectedDayRecalls = filteredRecalls.filter((r) => r.next_recall_date === selectedDate);
 
   const handleDeleteSession = (sessId) => {
-    setAppData((prev) => ({
-      ...prev,
-      lastUpdated: Date.now(),
-      class_sessions: (prev.class_sessions || []).filter((s) => s.id !== sessId),
-    }));
-    showToast('🗑️ Registro de clase eliminado');
+    const sess = (appData.class_sessions || []).find((s) => s.id === sessId);
+    const subj = appData.subjects.find((s) => s.id === sess?.subject_id);
+    const doDelete = () => {
+      setAppData((prev) => ({
+        ...prev,
+        lastUpdated: Date.now(),
+        class_sessions: (prev.class_sessions || []).filter((s) => s.id !== sessId),
+      }));
+      showToast('🗑️ Registro de clase eliminado');
+    };
+    if (askConfirm) {
+      askConfirm(
+        `¿Estás seguro de que quieres eliminar el registro de clase de ${subj?.name || 'esta hora'} (${formatHumanDate(sess?.date)})?`,
+        doDelete
+      );
+    } else {
+      doDelete();
+    }
   };
 
   const handleDeleteExam = (examId) => {
-    setAppData((prev) => ({
-      ...prev,
-      lastUpdated: Date.now(),
-      exams: prev.exams.filter((e) => e.id !== examId),
-    }));
-    showToast('🗑️ Examen eliminado');
+    const ex = appData.exams.find((e) => e.id === examId);
+    const doDelete = () => {
+      setAppData((prev) => ({
+        ...prev,
+        lastUpdated: Date.now(),
+        exams: prev.exams.filter((e) => e.id !== examId),
+      }));
+      showToast('🗑️ Examen eliminado');
+    };
+    if (askConfirm) {
+      askConfirm(
+        `¿Estás seguro de que quieres eliminar el examen "${ex?.title || ''}"?`,
+        doDelete
+      );
+    } else {
+      doDelete();
+    }
   };
 
   if (createExamModalDate) {
@@ -3823,20 +3944,30 @@ function ExamsAndGermanGradesView({
 
                 return (
                   <div key={ex.id} className="p-3.5 rounded-xl bg-indigo-50/60 border border-indigo-200 space-y-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-bold text-indigo-700">
                         {stu?.avatar} {stu?.name} • {subj?.icon} {subj?.name}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDayPopupOpen(false);
-                          setGradingExamId(ex.id);
-                        }}
-                        className="px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs shadow-2xs"
-                      >
-                        {ex.grade_label ? `Nota: ${ex.grade_label}` : '🏅 Poner Nota (1+ a 6)'}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDayPopupOpen(false);
+                            setGradingExamId(ex.id);
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-bold text-xs shadow-2xs"
+                        >
+                          {ex.grade_label ? `Nota: ${ex.grade_label}` : '🏅 Poner Nota (1+ a 6)'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteExam(ex.id)}
+                          className="p-1.5 rounded-xl bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 text-xs font-bold"
+                          title="Eliminar examen"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
                     <div className="font-black text-base text-slate-900">{ex.title}</div>
                     {exSubs.length > 0 && (
@@ -3890,17 +4021,27 @@ function ExamsAndGermanGradesView({
                         </div>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDayPopupOpen(false);
-                        openRecapForStudent &&
-                          openRecapForStudent(sess.student_id, sess.date, sess.period_idx || 0, sess.subject_id);
-                      }}
-                      className="px-3 py-1.5 rounded-xl bg-white border border-indigo-200 text-indigo-700 text-xs font-bold shrink-0"
-                    >
-                      ✏️ Editar
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDayPopupOpen(false);
+                          openRecapForStudent &&
+                            openRecapForStudent(sess.student_id, sess.date, sess.period_idx || 0, sess.subject_id);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-white border border-indigo-200 text-indigo-700 text-xs font-bold"
+                      >
+                        ✏️ Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSession(sess.id)}
+                        className="p-1.5 rounded-xl bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 text-xs font-bold"
+                        title="Eliminar registro"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
                 );
               })
@@ -5121,22 +5262,24 @@ function StatsAndP2PSyncView({ appData, currentStudent, setAppData, showToast })
     });
   };
 
-  // 1. MÓVIL DE PAPÁ: ABRIR SALA FAMILIAR EN VIVO
+  const P2P_INTERNAL_PREFIX = 'sf_de_p2p_';
+
+  // 1. MÓVIL DE PAPÁ: ABRIR SALA FAMILIAR EN VIVO (SOLO 4 DÍGITOS VISIBLES)
   const startHostRoom = async () => {
     try {
       setPeerStatus('connecting');
       addLog('Iniciando sala P2P para la familia...');
       const PeerClass = await getPeerJS();
-      const code = 'FAMILIA-' + Math.floor(1000 + Math.random() * 9000);
-      setRoomCode(code);
+      const digits = String(Math.floor(1000 + Math.random() * 9000));
+      setRoomCode(digits);
 
       if (peerInstanceRef.current) peerInstanceRef.current.destroy();
-      const peer = new PeerClass(code);
+      const peer = new PeerClass(P2P_INTERNAL_PREFIX + digits);
       peerInstanceRef.current = peer;
 
-      peer.on('open', (id) => {
+      peer.on('open', () => {
         setPeerStatus('ready');
-        addLog('📡 Sala abierta: ' + id + '. Esperando a Enrique o Fernando...');
+        addLog('📡 Sala abierta con código: ' + digits + '. Esperando a Enrique o Fernando...');
       });
 
       peer.on('connection', (conn) => {
@@ -5169,23 +5312,23 @@ function StatsAndP2PSyncView({ appData, currentStudent, setAppData, showToast })
     }
   };
 
-  // 2. MÓVIL DEL HIJO: CONECTAR A LA SALA DE PAPÁ
+  // 2. MÓVIL DEL HIJO: CONECTAR A LA SALA DE PAPÁ (SOLO 4 DÍGITOS)
   const connectToHost = async () => {
-    const code = targetCodeInput.trim().toUpperCase();
-    if (!code) {
-      alert('Escribe el código que sale en el móvil de Papá (ej. FAMILIA-4821)');
+    const cleanDigits = targetCodeInput.replace(/\D/g, '').slice(0, 4);
+    if (cleanDigits.length !== 4) {
+      alert('Escribe el número de 4 dígitos que sale en el móvil de Papá (ej. 4821)');
       return;
     }
     try {
       setPeerStatus('connecting');
-      addLog('Conectando con el móvil de Papá (' + code + ')...');
+      addLog('Conectando con el móvil de Papá (código ' + cleanDigits + ')...');
       const PeerClass = await getPeerJS();
       if (peerInstanceRef.current) peerInstanceRef.current.destroy();
       const peer = new PeerClass();
       peerInstanceRef.current = peer;
 
       peer.on('open', () => {
-        const conn = peer.connect(code);
+        const conn = peer.connect(P2P_INTERNAL_PREFIX + cleanDigits);
         conn.on('open', () => {
           setPeerStatus('connected');
           addLog('Enviando mis temas y repasos a Papá...');
@@ -5435,13 +5578,16 @@ function StatsAndP2PSyncView({ appData, currentStudent, setAppData, showToast })
 
           {/* PANEL HIJO */}
           <div className="p-3 rounded-xl bg-white/10 border border-white/15 space-y-2">
-            <div className="text-xs font-bold text-indigo-300">👦 2. En el móvil del hijo:</div>
+            <div className="text-xs font-bold text-indigo-300">👦 2. En el móvil del hijo (4 dígitos):</div>
             <input
               type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
               value={targetCodeInput}
-              onChange={(e) => setTargetCodeInput(e.target.value)}
-              placeholder="Ej. FAMILIA-4821"
-              className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white font-bold uppercase placeholder-slate-500"
+              onChange={(e) => setTargetCodeInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              placeholder="Ej. 4821"
+              className="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-sm text-center tracking-widest text-white font-black placeholder-slate-500"
             />
             <button
               onClick={connectToHost}
