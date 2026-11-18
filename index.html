@@ -335,6 +335,8 @@ const createInitialData = () => {
         5: ['sub_f_deu', 'sub_f_mathe', 'sub_f_eng'],
       },
     },
+    schedule_meta: {},
+    deleted_ids: {},
     topics: [
       {
         id: 'top_e_1',
@@ -437,27 +439,45 @@ const createInitialData = () => {
   };
 };
 
-const mergeArraysById = (localArr = [], remoteArr = []) => {
+const mergeDeletedIds = (localDel = {}, remoteDel = {}) => {
+  const merged = { ...(localDel || {}) };
+  Object.entries(remoteDel || {}).forEach(([id, ts]) => {
+    if (!merged[id] || ts > merged[id]) {
+      merged[id] = ts;
+    }
+  });
+  return merged;
+};
+
+const isItemDeleted = (item, deletedIds = {}) => {
+  if (!item || !item.id) return false;
+  const delTs = deletedIds[item.id];
+  return Boolean(delTs && delTs >= (item.updated_at || 0));
+};
+
+const mergeArraysById = (localArr = [], remoteArr = [], deletedIds = {}) => {
   const map = new Map();
-  localArr.forEach((item) => map.set(item.id, item));
-  remoteArr.forEach((rem) => {
+  (localArr || []).forEach((item) => map.set(item.id, item));
+  (remoteArr || []).forEach((rem) => {
     const existing = map.get(rem.id);
     if (!existing || (rem.updated_at || 0) >= (existing.updated_at || 0)) {
       map.set(rem.id, rem);
     }
   });
-  return Array.from(map.values());
+  return Array.from(map.values()).filter((item) => !isItemDeleted(item, deletedIds));
 };
 
-const smartMergeTopics = (localTopics = [], remoteTopics = []) => {
+const smartMergeTopics = (localTopics = [], remoteTopics = [], deletedIds = {}) => {
   const map = new Map();
-  localTopics.forEach((t) => map.set(t.id, { ...t, subtopics: [...(t.subtopics || [])] }));
-  remoteTopics.forEach((remT) => {
+  (localTopics || []).forEach((t) =>
+    map.set(t.id, { ...t, subtopics: [...(t.subtopics || [])] })
+  );
+  (remoteTopics || []).forEach((remT) => {
     const existing = map.get(remT.id);
     if (!existing) {
-      map.set(remT.id, remT);
+      map.set(remT.id, { ...remT, subtopics: [...(remT.subtopics || [])] });
     } else {
-      const mergedSubtopics = mergeArraysById(existing.subtopics || [], remT.subtopics || []);
+      const mergedSubtopics = mergeArraysById(existing.subtopics || [], remT.subtopics || [], deletedIds);
       const newerTopic = (remT.updated_at || 0) >= (existing.updated_at || 0) ? remT : existing;
       map.set(remT.id, {
         ...newerTopic,
@@ -466,24 +486,89 @@ const smartMergeTopics = (localTopics = [], remoteTopics = []) => {
       });
     }
   });
-  return Array.from(map.values());
+  return Array.from(map.values())
+    .filter((t) => !isItemDeleted(t, deletedIds))
+    .map((t) => ({
+      ...t,
+      subtopics: (t.subtopics || []).filter((st) => !isItemDeleted(st, deletedIds)),
+    }));
+};
+
+const smartMergeSchedules = (
+  localSchedules = {},
+  remoteSchedules = {},
+  localMeta = {},
+  remoteMeta = {}
+) => {
+  const mergedSchedules = {};
+  const mergedMeta = { ...(localMeta || {}) };
+  const stuIds = new Set([
+    ...Object.keys(localSchedules || {}),
+    ...Object.keys(remoteSchedules || {}),
+  ]);
+
+  stuIds.forEach((stuId) => {
+    const lStu = (localSchedules && localSchedules[stuId]) || {};
+    const rStu = (remoteSchedules && remoteSchedules[stuId]) || {};
+    const dayKeys = new Set([
+      '1', '2', '3', '4', '5',
+      ...Object.keys(lStu),
+      ...Object.keys(rStu),
+    ]);
+    mergedSchedules[stuId] = {};
+
+    dayKeys.forEach((day) => {
+      const metaKey = `${stuId}:${day}`;
+      const lTime = (localMeta && localMeta[metaKey]) || 0;
+      const rTime = (remoteMeta && remoteMeta[metaKey]) || 0;
+      const hasL = Array.isArray(lStu[day]);
+      const hasR = Array.isArray(rStu[day]);
+
+      if (rTime > lTime && hasR) {
+        mergedSchedules[stuId][day] = [...rStu[day]];
+        mergedMeta[metaKey] = rTime;
+      } else if (lTime > rTime && hasL) {
+        mergedSchedules[stuId][day] = [...lStu[day]];
+        mergedMeta[metaKey] = lTime;
+      } else if (hasL) {
+        mergedSchedules[stuId][day] = [...lStu[day]];
+        if (lTime > 0) mergedMeta[metaKey] = lTime;
+      } else if (hasR) {
+        mergedSchedules[stuId][day] = [...rStu[day]];
+        if (rTime > 0) mergedMeta[metaKey] = rTime;
+      }
+    });
+  });
+
+  return { schedules: mergedSchedules, schedule_meta: mergedMeta };
 };
 
 const smartMergeState = (localState, remoteState) => {
   if (!remoteState || !remoteState.students) return localState;
+  const mergedDeletedIds = mergeDeletedIds(localState.deleted_ids, remoteState.deleted_ids);
+  const { schedules, schedule_meta } = smartMergeSchedules(
+    localState.schedules,
+    remoteState.schedules,
+    localState.schedule_meta,
+    remoteState.schedule_meta
+  );
+
   return {
     lastUpdated: Date.now(),
-    students: mergeArraysById(localState.students, remoteState.students),
-    subjects: mergeArraysById(localState.subjects, remoteState.subjects),
-    schedules: {
-      ...localState.schedules,
-      ...(remoteState.schedules || {}),
-    },
-    topics: smartMergeTopics(localState.topics, remoteState.topics),
-    work_logs: mergeArraysById(localState.work_logs, remoteState.work_logs),
-    class_sessions: mergeArraysById(localState.class_sessions || [], remoteState.class_sessions || []),
-    tasks: mergeArraysById(localState.tasks, remoteState.tasks),
-    exams: mergeArraysById(localState.exams, remoteState.exams),
+    deleted_ids: mergedDeletedIds,
+    schedule_meta,
+    students: mergeArraysById(localState.students, remoteState.students, mergedDeletedIds),
+    subjects: mergeArraysById(localState.subjects, remoteState.subjects, mergedDeletedIds),
+    schedules,
+    topics: smartMergeTopics(localState.topics, remoteState.topics, mergedDeletedIds),
+    work_logs: mergeArraysById(localState.work_logs, remoteState.work_logs, mergedDeletedIds),
+    class_sessions: mergeArraysById(
+      localState.class_sessions || [],
+      remoteState.class_sessions || [],
+      mergedDeletedIds
+    ),
+    tasks: mergeArraysById(localState.tasks, remoteState.tasks, mergedDeletedIds),
+    exams: mergeArraysById(localState.exams, remoteState.exams, mergedDeletedIds),
   };
 };
 
@@ -501,6 +586,8 @@ function App() {
           ...init,
           ...parsed,
           class_sessions: parsed.class_sessions || init.class_sessions || [],
+          schedule_meta: parsed.schedule_meta || {},
+          deleted_ids: parsed.deleted_ids || {},
         };
       }
     } catch (e) {
@@ -1160,18 +1247,23 @@ function ScheduleConfigModal({ appData, currentStudent, setAppData, onClose, sho
   const dayScheduleIds = (appData.schedules[selectedStuId] && appData.schedules[selectedStuId][selectedDay]) || [];
 
   const addSubjectToDay = (subjId) => {
+    const now = Date.now();
     setAppData((prev) => {
       const stuSched = prev.schedules[selectedStuId] || {};
       const currentList = stuSched[selectedDay] || [];
       return {
         ...prev,
-        lastUpdated: Date.now(),
+        lastUpdated: now,
         schedules: {
           ...prev.schedules,
           [selectedStuId]: {
             ...stuSched,
             [selectedDay]: [...currentList, subjId],
           },
+        },
+        schedule_meta: {
+          ...(prev.schedule_meta || {}),
+          [`${selectedStuId}:${selectedDay}`]: now,
         },
       };
     });
@@ -1183,18 +1275,23 @@ function ScheduleConfigModal({ appData, currentStudent, setAppData, onClose, sho
     const subj = appData.subjects.find((s) => s.id === subId);
     const dayName = WEEKDAYS.find((w) => w.key === selectedDay)?.name || 'este día';
     const doRemove = () => {
+      const now = Date.now();
       setAppData((prev) => {
         const stuSched = prev.schedules[selectedStuId] || {};
         const currentList = stuSched[selectedDay] || [];
         return {
           ...prev,
-          lastUpdated: Date.now(),
+          lastUpdated: now,
           schedules: {
             ...prev.schedules,
             [selectedStuId]: {
               ...stuSched,
               [selectedDay]: currentList.filter((_, i) => i !== idx),
             },
+          },
+          schedule_meta: {
+            ...(prev.schedule_meta || {}),
+            [`${selectedStuId}:${selectedDay}`]: now,
           },
         };
       });
@@ -1407,10 +1504,15 @@ function EditProfilesAndSubjectsModal({ appData, setAppData, onClose, showToast,
   const handleDeleteSubject = (subjId) => {
     const subj = appData.subjects.find((s) => s.id === subjId);
     const doDelete = () => {
+      const now = Date.now();
       setAppData((prev) => ({
         ...prev,
-        lastUpdated: Date.now(),
+        lastUpdated: now,
         subjects: prev.subjects.filter((s) => s.id !== subjId),
+        deleted_ids: {
+          ...(prev.deleted_ids || {}),
+          [subjId]: now,
+        },
       }));
       showToast('🗑️ Asignatura eliminada');
     };
@@ -2463,11 +2565,20 @@ function TopicsAndTasksView({
   const handleDeleteTopic = (topicId) => {
     const top = appData.topics.find((t) => t.id === topicId);
     const doDelete = () => {
-      setAppData((prev) => ({
-        ...prev,
-        lastUpdated: Date.now(),
-        topics: prev.topics.filter((t) => t.id !== topicId),
-      }));
+      const now = Date.now();
+      setAppData((prev) => {
+        const targetTop = prev.topics.find((t) => t.id === topicId);
+        const nextDeleted = { ...(prev.deleted_ids || {}), [topicId]: now };
+        (targetTop?.subtopics || []).forEach((st) => {
+          nextDeleted[st.id] = now;
+        });
+        return {
+          ...prev,
+          lastUpdated: now,
+          topics: prev.topics.filter((t) => t.id !== topicId),
+          deleted_ids: nextDeleted,
+        };
+      });
       showToast('🗑️ Tema eliminado');
     };
     if (askConfirm) {
@@ -2537,18 +2648,23 @@ function TopicsAndTasksView({
     const top = appData.topics.find((t) => t.id === topicId);
     const sub = top?.subtopics.find((st) => st.id === subtopicId);
     const doDelete = () => {
+      const now = Date.now();
       setAppData((prev) => ({
         ...prev,
-        lastUpdated: Date.now(),
+        lastUpdated: now,
         topics: prev.topics.map((t) =>
           t.id !== topicId
             ? t
             : {
                 ...t,
-                updated_at: Date.now(),
+                updated_at: now,
                 subtopics: t.subtopics.filter((st) => st.id !== subtopicId),
               }
         ),
+        deleted_ids: {
+          ...(prev.deleted_ids || {}),
+          [subtopicId]: now,
+        },
       }));
       showToast('🗑️ Subtema eliminado');
     };
@@ -3711,10 +3827,15 @@ function ExamsAndGermanGradesView({
     const sess = (appData.class_sessions || []).find((s) => s.id === sessId);
     const subj = appData.subjects.find((s) => s.id === sess?.subject_id);
     const doDelete = () => {
+      const now = Date.now();
       setAppData((prev) => ({
         ...prev,
-        lastUpdated: Date.now(),
+        lastUpdated: now,
         class_sessions: (prev.class_sessions || []).filter((s) => s.id !== sessId),
+        deleted_ids: {
+          ...(prev.deleted_ids || {}),
+          [sessId]: now,
+        },
       }));
       showToast('🗑️ Registro de clase eliminado');
     };
@@ -3731,10 +3852,15 @@ function ExamsAndGermanGradesView({
   const handleDeleteExam = (examId) => {
     const ex = appData.exams.find((e) => e.id === examId);
     const doDelete = () => {
+      const now = Date.now();
       setAppData((prev) => ({
         ...prev,
-        lastUpdated: Date.now(),
+        lastUpdated: now,
         exams: prev.exams.filter((e) => e.id !== examId),
+        deleted_ids: {
+          ...(prev.deleted_ids || {}),
+          [examId]: now,
+        },
       }));
       showToast('🗑️ Examen eliminado');
     };
@@ -5250,6 +5376,11 @@ function StatsAndP2PSyncView({ appData, currentStudent, setAppData, showToast })
   const [syncLogs, setSyncLogs] = useState([]);
   const fileInputRef = useRef(null);
   const peerInstanceRef = useRef(null);
+  const appDataRef = useRef(appData);
+
+  useEffect(() => {
+    appDataRef.current = appData;
+  }, [appData]);
 
   const addLog = (msg) => {
     setSyncLogs((prev) => [new Date().toLocaleTimeString().slice(0, 5) + ' · ' + msg, ...prev.slice(0, 5)]);
@@ -5290,14 +5421,12 @@ function StatsAndP2PSyncView({ appData, currentStudent, setAppData, showToast })
 
         conn.on('data', (incoming) => {
           if (incoming && incoming.type === 'SYNC_DATA') {
-            setAppData((prev) => {
-              const merged = smartMergeState(prev, incoming.payload);
-              // Responder con los datos consolidados
-              conn.send({ type: 'SYNC_CONFIRM', payload: merged });
-              return merged;
-            });
-            addLog('✅ ¡Datos fusionados sin perder nada!');
-            showToast('🔄 Datos fusionados con éxito vía P2P');
+            const merged = smartMergeState(appDataRef.current, incoming.payload);
+            appDataRef.current = merged;
+            setAppData(merged);
+            conn.send({ type: 'SYNC_CONFIRM', payload: merged });
+            addLog('✅ ¡Datos fusionados en ambos sentidos!');
+            showToast('🔄 Datos sincronizados en los dos sentidos');
           }
         });
       });
@@ -5332,13 +5461,15 @@ function StatsAndP2PSyncView({ appData, currentStudent, setAppData, showToast })
         conn.on('open', () => {
           setPeerStatus('connected');
           addLog('Enviando mis temas y repasos a Papá...');
-          conn.send({ type: 'SYNC_DATA', payload: appData });
+          conn.send({ type: 'SYNC_DATA', payload: appDataRef.current });
         });
 
         conn.on('data', (res) => {
           if (res && res.type === 'SYNC_CONFIRM') {
-            setAppData((prev) => smartMergeState(prev, res.payload));
-            addLog('✅ ¡Sincronizado con Papá con éxito!');
+            const merged = smartMergeState(appDataRef.current, res.payload);
+            appDataRef.current = merged;
+            setAppData(merged);
+            addLog('✅ ¡Sincronizado con Papá en ambos sentidos!');
             showToast('🔄 Sincronizado con Papá correctamente');
           }
         });
